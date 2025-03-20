@@ -32,4 +32,12 @@ public class GameStartDTO {
     public void setPlayerCount(int playerCount) {
         this.playerCount = playerCount;
     }
+    
+    public String getGameStatus() {
+        return gameStatus;
+    }
+    
+    public void setGameStatus(String gameStatus) {
+        this.gameStatus = gameStatus;
+    }
 }

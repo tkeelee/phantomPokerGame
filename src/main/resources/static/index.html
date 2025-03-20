@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title>扑克牌游戏</title>
+    <link rel="stylesheet" href="poke/css/common.css"/>
+    <script src="poke/plugins/jQuery/jquery-1.8.3.min.js"></script>
+    <script src="poke/plugins/placeholder/placeholder.js"></script>
+    <script src="poke/plugins/layer/layer.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="poke/js/common.js"></script>
+</head>
+<body>
+    <div id="loginForm" style="display: none;">
+        <h2>登录游戏</h2>
+        <input type="text" id="playerName" placeholder="请输入玩家名称">
+        <button onclick="login()">登录</button>
+    </div>
+
+    <div id="gameRoom" style="display: none;">
+        <table class="poke" width="100%" height="100%" border="1" cellspacing="0" cellpadding="0">
+            <tr>
+                <td colspan="3" height="5%" class="header">
+                    <h1><img src="poke/images/icon.png"/>扑克牌游戏</h1>
+                </td>
+            </tr>
+            <tr>
+                <td class="mainView" height="65%" style="width:70%; background:url('poke/images/logobg.png') no-repeat 50% 50%">
+                    <div class="topTips">
+                        <h2>本次打出的牌</h2>
+                        <div class="current_pile" id="currentPile"></div>
+                    </div>
+                </td>
+                <td width="15%" valign="top" align="center">
+                    <h2 class="h2_title">出牌历史</h2>
+                    <div class="his_con">
+                        <ol id="historyList"></ol>
+                    </div>
+                </td>
+                <td valign="top" class="collapse_win" style="background:#0488c8">
+                    <p class="joiner_num">参与人数<span id="playerCount">0</span>人</p>
+                    <div class="small_win">
+                        <dl class="online">
+                            <dt>在线玩家</dt>
+                            <dd id="playerList"></dd>
+                        </dl>
+                        <dl class="sort">
+                            <dt>玩家排名</dt>
+                            <dd id="playerRanking"></dd>
+                        </dl>
+                        <dl class="chat">
+                            <dt>聊天窗口</dt>
+                            <dd>
+                                <div class="chat_con">
+                                    <ol id="chatList"></ol>
+                                </div>
+                                <div class="input_area">
+                                    <input type="text" id="chatInput" placeholder="输入聊天内容" class="input_text"/>
+                                    <span class="input_btn" onclick="sendChat()">发送</span>
+                                </div>
+                            </dd>
+                        </dl>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" height="30%" valign="top">
+                    <div class="hand">
+                        <p>手牌数<span id="handCount">0</span></p>
+                    </div>
+                    <div class="mypoke clear" id="playerHand"></div>
+                </td>
+                <td valign="top" style="background:#0488c8">
+                    <ul class="play">
+                        <li><span class="btn turn" onclick="playCards()">出</span></li>
+                        <li><span class="btn pass" onclick="pass()">过</span></li>
+                        <li><span class="btn challenge" onclick="challenge()">质疑</span></li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let currentPlayer = null;
+        let currentRoom = null;
+        let selectedCards = [];
+
+        function connect() {
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function(frame) {
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/game/state', function(gameState) {
+                    updateGameState(JSON.parse(gameState.body));
+                });
+            });
+        }
+
+        function login() {
+            const playerName = document.getElementById('playerName').value;
+            if (!playerName) {
+                alert('请输入玩家名称');
+                return;
+            }
+            currentPlayer = playerName;
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('gameRoom').style.display = 'block';
+            connect();
+            createRoom();
+        }
+
+        function createRoom() {
+            fetch('/api/game/room', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    hostId: currentPlayer,
+                    maxPlayers: 4
+                })
+            })
+            .then(response => response.json())
+            .then(room => {
+                currentRoom = room;
+                joinRoom(room.id);
+            });
+        }
+
+        function joinRoom(roomId) {
+            fetch(`/api/game/room/${roomId}/join`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    playerId: currentPlayer
+                })
+            });
+        }
+
+        function updateGameState(state) {
+            // 更新玩家列表
+            document.getElementById('playerList').innerHTML = state.players
+                .map(player => `<div>${player}</div>`)
+                .join('');
+            
+            // 更新手牌
+            updatePlayerHand(state.playerHands[currentPlayer] || []);
+            
+            // 更新当前牌堆
+            updateCurrentPile(state.currentPile);
+            
+            // 更新历史记录
+            updateHistory(state.historyPile);
+        }
+
+        function updatePlayerHand(cards) {
+            const handContainer = document.getElementById('playerHand');
+            handContainer.innerHTML = cards.map(card => `
+                <a class="card" onclick="selectCard(this)" data-card="${JSON.stringify(card)}">
+                    <span class="lt pv">${card.value}</span>
+                    <span class="cm">${card.suit}</span>
+                    <span class="rb pv">${card.value}</span>
+                </a>
+            `).join('');
+            document.getElementById('handCount').textContent = cards.length;
+        }
+
+        function selectCard(element) {
+            element.classList.toggle('selected');
+            const card = JSON.parse(element.dataset.card);
+            if (element.classList.contains('selected')) {
+                selectedCards.push(card);
+            } else {
+                selectedCards = selectedCards.filter(c => 
+                    c.suit !== card.suit || c.value !== card.value
+                );
+            }
+        }
+
+        function playCards() {
+            if (selectedCards.length === 0) {
+                alert('请选择要出的牌');
+                return;
+            }
+            
+            const message = {
+                type: 'PLAY',
+                roomId: currentRoom.id,
+                playerId: currentPlayer,
+                cards: selectedCards,
+                declaredCount: selectedCards.length,
+                declaredValue: selectedCards[0].value
+            };
+            
+            stompClient.send("/app/game/action", {}, JSON.stringify(message));
+            selectedCards = [];
+        }
+
+        function pass() {
+            const message = {
+                type: 'PASS',
+                roomId: currentRoom.id,
+                playerId: currentPlayer
+            };
+            stompClient.send("/app/game/action", {}, JSON.stringify(message));
+        }
+
+        function challenge() {
+            const message = {
+                type: 'CHALLENGE',
+                roomId: currentRoom.id,
+                playerId: currentPlayer,
+                targetPlayerId: currentRoom.lastPlayerId
+            };
+            stompClient.send("/app/game/action", {}, JSON.stringify(message));
+        }
+
+        function sendChat() {
+            const content = document.getElementById('chatInput').value;
+            if (!content) return;
+            
+            const message = {
+                type: 'CHAT',
+                roomId: currentRoom.id,
+                playerId: currentPlayer,
+                content: content
+            };
+            
+            stompClient.send("/app/game/action", {}, JSON.stringify(message));
+            document.getElementById('chatInput').value = '';
+        }
+
+        function updateCurrentPile(cards) {
+            const pileContainer = document.getElementById('currentPile');
+            pileContainer.innerHTML = cards.map(card => `
+                <div class="card">
+                    <span class="lt pv">${card.value}</span>
+                    <span class="cm">${card.suit}</span>
+                    <span class="rb pv">${card.value}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateHistory(history) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = history.map(record => `
+                <li>${record.playerId} 打出 ${record.cards.length} 张 ${record.declaredValue}</li>
+            `).join('');
+        }
+    </script>
+</body>
+</html> 

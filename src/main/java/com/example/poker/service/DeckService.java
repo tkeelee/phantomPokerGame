@@ -1,14 +1,19 @@
 package com.example.poker.service;
 
 import com.example.poker.model.Card;
+import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Map;
+import java.util.HashMap;
 
+/**
+ * 牌组服务类，负责创建和洗牌
+ */
+@Service
 public class DeckService {
-    private static final String[] SUITS = {"♠", "♥", "♦", "♣"};
-    private static final String[] RANKS = {"3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"};
 
     /**
      * 生成指定数量的洗牌后的扑克牌堆
@@ -26,15 +31,21 @@ public class DeckService {
         return decks;
     }
 
+    /**
+     * 创建单副牌（包含54张牌）
+     * @param decks 牌的集合
+     */
     private void createSingleDeck(List<Card> decks) {
-        for (String suit : SUITS) {
-            for (int j = 0; j < RANKS.length; j++) {
-                decks.add(new Card(RANKS[j], suit, String.valueOf(j + 3),suit)); // 3-15的数值
+        // 添加普通牌
+        for (Card.Suit suit : Card.Suit.values()) {
+            for (int value = 1; value <= 13; value++) {
+                decks.add(new Card(suit, value));
             }
         }
+        
         // 添加大小王
-        decks.add(new Card("Red Joker", "","16",""));
-        decks.add(new Card("Black Joker", "","17",""));
+        decks.add(new Card(true));  // 大王
+        decks.add(new Card(false)); // 小王
     }
 
     /**
@@ -47,5 +58,33 @@ public class DeckService {
             int index = random.nextInt(i + 1);
             Collections.swap(list, index, i);
         }
+    }
+    
+    /**
+     * 均匀分牌给玩家
+     * 
+     * @param deck 牌组
+     * @param playerCount 玩家数量
+     * @return 玩家ID到手牌的映射
+     */
+    public Map<String, List<Card>> dealCards(List<Card> deck, List<String> players) {
+        Map<String, List<Card>> playerHands = new HashMap<>();
+        
+        // 初始化每个玩家的手牌
+        for (String playerId : players) {
+            playerHands.put(playerId, new ArrayList<>());
+        }
+        
+        // 轮流发牌
+        int playerIndex = 0;
+        int playerCount = players.size();
+        
+        while (!deck.isEmpty()) {
+            String currentPlayerId = players.get(playerIndex);
+            playerHands.get(currentPlayerId).add(deck.remove(0));
+            playerIndex = (playerIndex + 1) % playerCount;
+        }
+        
+        return playerHands;
     }
 }

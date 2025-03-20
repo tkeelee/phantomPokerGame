@@ -1,66 +1,151 @@
 package com.example.poker.model;
 
-import java.util.*;
+import lombok.Data;
+import javax.persistence.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+/**
+ * 游戏房间类，表示一个游戏房间的状态
+ */
+@Data
+@Entity
 public class GameRoom {
-    private List<String> players = new ArrayList<>();
-    private Map<String, List<Card>> playerHands = new HashMap<>();
-    private List<Card> cardDeck = new LinkedList<>();
-    private String lastClaim;
-    
-    // 初始化多副扑克牌
+    @Id
+    private String id;                        // 房间ID
+    private String hostId;                    // 房主ID
+    private int maxPlayers;                   // 最大玩家数
+    @Enumerated(EnumType.STRING)
+    private GameStatus status;                // 房间状态
+    @ElementCollection
+    private List<String> players;             // 玩家列表
+    @ElementCollection
+    private List<String> readyPlayers;        // 已准备玩家列表
+    private int currentPlayerIndex;           // 当前玩家索引
+    @Transient
+    private List<Card> cardDeck;              // 牌堆
+    @Transient
+    private Map<String, List<Card>> playerHands; // 玩家手牌映射
+    @Transient
+    private List<Card> currentPile;           // 当前牌堆（打出的牌）
+    private String lastClaim;                 // 最后声明
+
+    /**
+     * 默认构造函数
+     */
     public GameRoom() {
-        initializeDecks(2); // 使用两副牌
+        this.players = new ArrayList<>();
+        this.readyPlayers = new ArrayList<>();
+        this.cardDeck = new ArrayList<>();
+        this.playerHands = new HashMap<>();
+        this.currentPile = new ArrayList<>();
+        this.status = GameStatus.WAITING;
     }
 
-    private void initializeDecks(int deckCount) {
-        String[] suits = {"♠", "♥", "♦", "♣"};
-        String[] ranks = {"3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"};
+    /**
+     * 添加玩家到房间
+     * @param playerId 玩家ID
+     */
+    public void addPlayer(String playerId) {
+        if (!players.contains(playerId)) {
+            players.add(playerId);
+        }
+    }
+
+    /**
+     * 从房间移除玩家
+     * @param playerId 玩家ID
+     */
+    public void removePlayer(String playerId) {
+        players.remove(playerId);
+        readyPlayers.remove(playerId);
+    }
+
+    /**
+     * 处理玩家退出
+     * @param playerId 退出的玩家ID
+     */
+    public void handlePlayerExit(String playerId) {
+        removePlayer(playerId);
         
-        for(int i=0; i<deckCount; i++) {
-            for(String suit : suits) {
-                for(String rank : ranks) {
-                    cardDeck.add(new Card(rank, suit,rank, suit.equals("♥") || suit.equals("♦") ? "red" : "black"));
-                }
+        // 如果是房主退出，转移房主权限
+        if (playerId.equals(hostId) && !players.isEmpty()) {
+            hostId = players.get(0);
+        }
+    }
+
+    /**
+     * 检查所有玩家是否都已准备
+     * @return 是否所有玩家都已准备
+     */
+    public boolean areAllPlayersReady() {
+        return players.size() >= 2 && readyPlayers.size() == players.size();
+    }
+
+    /**
+     * 获取下一个玩家的索引
+     * @return 下一个玩家的索引
+     */
+    public int getNextPlayerIndex() {
+        return (currentPlayerIndex + 1) % players.size();
+    }
+
+    /**
+     * 获取下一个玩家的ID
+     * @return 下一个玩家的ID
+     */
+    public String getNextPlayerId() {
+        if (players.isEmpty()) {
+            return null;
+        }
+        return players.get(getNextPlayerIndex());
+    }
+
+    /**
+     * 获取当前玩家的ID
+     * @return 当前玩家的ID
+     */
+    public String getCurrentPlayerId() {
+        if (players.isEmpty() || currentPlayerIndex >= players.size()) {
+            return null;
+        }
+        return players.get(currentPlayerIndex);
+    }
+    
+    /**
+     * 获取最后声明的内容
+     * @return 最后声明的内容
+     */
+    public String getLastClaim() {
+        return lastClaim;
+    }
+    
+    /**
+     * 设置最后声明的内容
+     * @param lastClaim 最后声明的内容
+     */
+    public void setLastClaim(String lastClaim) {
+        this.lastClaim = lastClaim;
+    }
+    
+    /**
+     * 检查游戏是否结束（有玩家手牌为空）
+     * @return 游戏是否结束
+     */
+    public boolean checkGameEnd() {
+        if (playerHands == null || playerHands.isEmpty()) {
+            return false;
+        }
+        
+        // 检查是否有玩家手牌为空
+        for (List<Card> hand : playerHands.values()) {
+            if (hand.isEmpty()) {
+                return true;
             }
         }
-        Collections.shuffle(cardDeck);
+        
+        return false;
     }
-
-    public void addPlayer(Player player) {
-        players.add(player.getId());
-        dealInitialCards(player.getId());
-    }
-
-    private void dealInitialCards(String playerId) {
-        List<Card> hand = new ArrayList<>();
-        for(int i=0; i<13; i++) {
-            hand.add(cardDeck.remove(0));
-        }
-        playerHands.put(playerId, hand);
-    }
-
-    // 验证牌型声明
-    public boolean validateCardClaim(List<Card> cards, String claim) {
-        // 实现牌型验证逻辑（单张、对子、顺子等）
-        return true; // 示例实现
-    }
-
-    public void transferCardsToDeck(List<Card> cards) {
-        cardDeck.addAll(cards);
-        lastClaim = cards.toString();
-    }
-
-    public boolean validateLastClaim() {
-        // 实际验证逻辑
-        return true;
-    }
-
-    public void applyChallengePenalty(String challenger, String target, boolean isValid) {
-        // 处理挑战成功/失败的惩罚逻辑
-    }
-
-    public String getRoomStatus() {
-        return players.size() >= 2 ? "READY" : "WAITING";
-    }
-}
+} 

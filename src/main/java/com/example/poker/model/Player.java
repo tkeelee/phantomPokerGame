@@ -20,6 +20,8 @@ public class Player {
 
     // Getters and setters
     public String getId() { return id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public List<Card> getHand() { return hand; }
     public void addToHand(Card card) {
         hand.add(card);

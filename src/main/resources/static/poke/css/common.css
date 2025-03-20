@@ -46,7 +46,7 @@ textarea {
 
 body {
     font-size:14px;
-    font-family: "微软雅黑";
+    font-family: Arial, sans-serif;
     background:#fafbfc;
     color:#333;
 }
@@ -121,3 +121,187 @@ text-shadow: 0 1px 1px rgba(0,0,0,.3);-webkit-box-shadow: 0 1px 2px rgba(0,0,0,.
 .topTips h2{text-align: center;}
 .current_poke{padding:0 10px;}
 .current_poke a{background-image:url('../images/pokeback.png'); background-repeat: no-repeat; background-position: center center;}
+
+#loginForm {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#loginForm input {
+    padding: 8px;
+    margin: 10px 0;
+    width: 200px;
+}
+
+#loginForm button {
+    padding: 8px 20px;
+    background: #0488c8;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.card {
+    display: inline-block;
+    width: 60px;
+    height: 80px;
+    margin: 5px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-10px);
+}
+
+.card.selected {
+    transform: translateY(-10px);
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}
+
+.card .lt {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+}
+
+.card .rb {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+}
+
+.card .cm {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.current_pile {
+    min-height: 100px;
+    padding: 10px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 5px;
+}
+
+.his_con {
+    height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 5px;
+}
+
+.chat_con {
+    height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 5px;
+}
+
+.input_area {
+    margin-top: 10px;
+}
+
+.input_text {
+    width: 80%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.input_btn {
+    display: inline-block;
+    padding: 5px 10px;
+    background: #0488c8;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.btn {
+    display: inline-block;
+    padding: 8px 20px;
+    margin: 5px;
+    background: #0488c8;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: #0377b7;
+}
+
+.header {
+    background: #0488c8;
+    color: white;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0;
+    padding: 10px;
+}
+
+.header img {
+    vertical-align: middle;
+    margin-right: 10px;
+}
+
+.h2_title {
+    color: #0488c8;
+    margin: 10px 0;
+}
+
+.joiner_num {
+    color: white;
+    text-align: center;
+    margin: 10px 0;
+}
+
+.online, .sort, .chat {
+    margin: 10px 0;
+    color: white;
+}
+
+.online dt, .sort dt, .chat dt {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.hand {
+    text-align: center;
+    margin: 10px 0;
+}
+
+.mypoke {
+    padding: 10px;
+    min-height: 100px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 5px;
+}
+
+.play {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+}
+
+.play li {
+    margin: 10px 0;
+}

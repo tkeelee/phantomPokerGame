@@ -4,66 +4,151 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.Data;
 
+@Data
 public class GameState {
+    private String roomId;  // 房间ID
+    private String hostId;  // 房主ID
+    private GameStatus status;  // 游戏状态
+    private String gameStatus;  // 游戏状态字符串表示
+    private List<String> players;  // 玩家列表
+    private int currentPlayerIndex;  // 当前玩家索引
+    private String currentPlayer;  // 当前玩家ID
+    private Map<String, List<Card>> playerHands;  // 玩家手牌
+    private List<Card> currentPile;  // 当前牌堆
+    private String lastClaim;  // 最后声明
+    private List<Card> selectedCards;  // 选中的牌
+    private String declaredValue;  // 声明的牌值
+
     public GameState() {
-        this.gameStatus = "WAITING";
         this.players = new ArrayList<>();
         this.playerHands = new HashMap<>();
+        this.currentPile = new ArrayList<>();
+        this.status = GameStatus.WAITING;
+        this.gameStatus = "WAITING";
+        this.currentPlayerIndex = 0;
+        this.selectedCards = new ArrayList<>();
     }
 
-    public GameState(String player1, String player2) {
-        this.players.add(player1);
-        this.players.add(player2);
-        this.currentPlayer = player1;
-        this.gameStatus = "IN_PROGRESS";
+    public String getRoomId() {
+        return roomId;
     }
 
-    private String currentPlayer;
-    private List<String> players = new ArrayList<>();
-    private Map<String, List<Card>> playerHands = new HashMap<>();
-    private List<Card> currentPile = new ArrayList<>();
-    private List<Card> selectedCards;
-    private String declaredValue;
-    private String hostId;
-    private String gameStatus;
+    public void setRoomId(String roomId) {
+        this.roomId = roomId;
+    }
 
-    // Getters and setters
-    public String getCurrentPlayer() { return currentPlayer; }
-    public void setCurrentPlayer(String currentPlayer) { this.currentPlayer = currentPlayer; }
+    public GameStatus getStatus() {
+        return status;
+    }
 
-    public List<String> getPlayers() { return players; }
-    public void setPlayers(List<String> players) { this.players = players; }
+    public void setStatus(GameStatus status) {
+        this.status = status;
+    }
 
-    public Map<String, List<Card>> getPlayerHands() { return playerHands; }
-    public void setPlayerHands(Map<String, List<Card>> playerHands) { this.playerHands = playerHands; }
+    public List<String> getPlayers() {
+        return players;
+    }
 
-    public List<Card> getCurrentPile() { return currentPile; }
-    public void setCurrentPile(List<Card> currentPile) { this.currentPile = currentPile; }
+    public void setPlayers(List<String> players) {
+        this.players = players;
+    }
 
-    public List<Card> getSelectedCards() { return selectedCards; }
-    public void setSelectedCards(List<Card> selectedCards) { this.selectedCards = selectedCards; }
+    public int getCurrentPlayerIndex() {
+        return currentPlayerIndex;
+    }
 
-    public String getDeclaredValue() { return declaredValue; }
-    public void setDeclaredValue(String declaredValue) { this.declaredValue = declaredValue; }
+    public void setCurrentPlayerIndex(int currentPlayerIndex) {
+        this.currentPlayerIndex = currentPlayerIndex;
+    }
 
-    public String getHostId() { return hostId; }
-    public void setHostId(String hostId) { this.hostId = hostId; }
+    public Map<String, List<Card>> getPlayerHands() {
+        return playerHands;
+    }
 
-    public String getGameStatus() { return gameStatus; }
+    public void setPlayerHands(Map<String, List<Card>> playerHands) {
+        this.playerHands = playerHands;
+    }
+
+    public List<Card> getCurrentPile() {
+        return currentPile;
+    }
+
+    public void setCurrentPile(List<Card> currentPile) {
+        this.currentPile = currentPile;
+    }
+
+    public String getLastClaim() {
+        return lastClaim;
+    }
+
+    public void setLastClaim(String lastClaim) {
+        this.lastClaim = lastClaim;
+    }
+
+    public String getHostId() {
+        return hostId;
+    }
+
+    public void setHostId(String hostId) {
+        this.hostId = hostId;
+    }
+
+    public String getGameStatus() {
+        return gameStatus;
+    }
+
+    public void setGameStatus(String gameStatus) {
+        this.gameStatus = gameStatus;
+    }
+
+    public void setCurrentPlayer(String playerId) {
+        this.currentPlayer = playerId;
+        // 更新玩家索引
+        if (players != null && players.contains(playerId)) {
+            this.currentPlayerIndex = players.indexOf(playerId);
+        }
+    }
+
+    public String getCurrentPlayer() {
+        if (currentPlayer != null) {
+            return currentPlayer;
+        }
+        if (players != null && !players.isEmpty()) {
+            return players.get(currentPlayerIndex);
+        }
+        return null;
+    }
+
+    public List<Card> getSelectedCards() {
+        return selectedCards;
+    }
+
+    public void setSelectedCards(List<Card> selectedCards) {
+        this.selectedCards = selectedCards;
+    }
+
+    public String getDeclaredValue() {
+        return declaredValue;
+    }
+
+    public void setDeclaredValue(String declaredValue) {
+        this.declaredValue = declaredValue;
+    }
+
+    public String getNextPlayer() {
+        if (players != null && !players.isEmpty()) {
+            int nextIndex = (currentPlayerIndex + 1) % players.size();
+            return players.get(nextIndex);
+        }
+        return null;
+    }
 
     public void penalizePlayer(String playerId) {
         // 扣除玩家积分逻辑
         // 实际扣分规则需要根据游戏规则实现
         System.out.println("玩家 " + playerId + " 受到处罚");
-    }
-
-    public void nextPlayer() {
-        int currentIndex = players.indexOf(currentPlayer);
-        if(currentIndex != -1) {
-            currentIndex = (currentIndex + 1) % players.size();
-            currentPlayer = players.get(currentIndex);
-        }
     }
 
     public boolean containsPlayer(String playerId) {
@@ -73,8 +158,7 @@ public class GameState {
     public boolean validateLastClaim() {
         // 最后声明验证逻辑
         return currentPile.stream().allMatch(card -> 
-            card.getRank().equals(declaredValue)
+            card.getRank().equals(lastClaim)
         );
     }
-    public void setGameStatus(String gameStatus) { this.gameStatus = gameStatus; }
 }

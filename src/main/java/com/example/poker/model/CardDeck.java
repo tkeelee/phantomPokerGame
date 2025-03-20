@@ -1,61 +1,97 @@
 package com.example.poker.model;
 
-import java.util.*;
+import org.springframework.stereotype.Component;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
+/**
+ * 牌组类，负责创建和管理扑克牌组
+ */
+@Component
 public class CardDeck {
-    private Map<String, List<Card>> playerHands = new HashMap<>();
-    private List<Card> discardPile = new ArrayList<>();
-    private Map<String, String> lastClaims = new HashMap<>();
-    private List<Card> fullDeck = new ArrayList<>();
-
-    public void initializeDecks(int numberOfDecks) {
-        fullDeck.clear();
-        String[] suits = {"♠", "♥", "♦", "♣"};
-        String[] ranks = {"2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
+    
+    /**
+     * 创建指定数量的完整牌组（包括大小王）
+     * @param deckCount 牌组数量
+     * @return 包含所有牌的牌组
+     */
+    public List<Card> createDeck(int deckCount) {
+        List<Card> deck = new ArrayList<>();
         
-        for (int i = 0; i < numberOfDecks; i++) {
-            for (String suit : suits) {
-                for (String rank : ranks) {
-                    fullDeck.add(new Card(rank, suit,rank, suit.equals("♥") || suit.equals("♦") ? "red" : "black"));
+        for (int i = 0; i < deckCount; i++) {
+            // 添加普通牌
+            for (Card.Suit suit : Card.Suit.values()) {
+                for (int value = 1; value <= 13; value++) {
+                    deck.add(new Card(suit, value));
                 }
             }
+            
+            // 添加大小王
+            deck.add(new Card(true));  // 大王
+            deck.add(new Card(false)); // 小王
         }
-        Collections.shuffle(fullDeck);
-    }
-
-    public void dealInitialHands(List<String> playerIds, int cardsPerPlayer) {
-        for (String playerId : playerIds) {
-            List<Card> hand = new ArrayList<>();
-            for (int i = 0; i < cardsPerPlayer; i++) {
-                hand.add(fullDeck.remove(0));
-            }
-            playerHands.put(playerId, hand);
-        }
-    }
-
-    public void removeCards(String playerId, List<Card> cards) {
-        List<Card> hand = playerHands.get(playerId);
-        hand.removeAll(cards);
-        discardPile.addAll(cards);
-    }
-
-    public boolean validateLastClaim(String playerId) {
-        String claim = lastClaims.get(playerId);
-        String[] parts = claim.split(" ");
-        int claimedCount = Integer.parseInt(parts[0]);
-        String claimedRank = parts[1];
         
-        long actualCount = discardPile.stream()
-            .filter(card -> card.getRank().equals(claimedRank))
-            .count();
-        return actualCount >= claimedCount;
+        return deck;
     }
-
-    public void recordClaim(String playerId, String claim) {
-        lastClaims.put(playerId, claim);
+    
+    /**
+     * 洗牌
+     * @param deck 需要洗牌的牌组
+     * @return 洗牌后的牌组
+     */
+    public List<Card> shuffle(List<Card> deck) {
+        Collections.shuffle(deck);
+        return deck;
     }
-
-    public boolean validateCardCombination(List<Card> cards) {
-        return cards.stream().allMatch(card -> card.getRank() != null && card.getSuit() != null);
+    
+    /**
+     * 创建并洗牌
+     * @param deckCount 牌组数量
+     * @return 已洗牌的牌组
+     */
+    public List<Card> createAndShuffleDeck(int deckCount) {
+        List<Card> deck = createDeck(deckCount);
+        return shuffle(deck);
+    }
+    
+    /**
+     * 从牌组中发牌
+     * @param deck 牌组
+     * @param count 需要发的牌数量
+     * @return 发出的牌
+     */
+    public List<Card> dealCards(List<Card> deck, int count) {
+        List<Card> hand = new ArrayList<>();
+        
+        for (int i = 0; i < count && !deck.isEmpty(); i++) {
+            hand.add(deck.remove(0));
+        }
+        
+        return hand;
+    }
+    
+    /**
+     * 均匀发牌给所有玩家
+     * @param deck 牌组
+     * @param playerCount 玩家数量
+     * @return 每个玩家的手牌
+     */
+    public List<List<Card>> dealToPlayers(List<Card> deck, int playerCount) {
+        List<List<Card>> playerHands = new ArrayList<>();
+        
+        // 初始化每个玩家的手牌列表
+        for (int i = 0; i < playerCount; i++) {
+            playerHands.add(new ArrayList<>());
+        }
+        
+        // 轮流发牌，直到牌组为空
+        int currentPlayer = 0;
+        while (!deck.isEmpty()) {
+            playerHands.get(currentPlayer).add(deck.remove(0));
+            currentPlayer = (currentPlayer + 1) % playerCount;
+        }
+        
+        return playerHands;
     }
 }
