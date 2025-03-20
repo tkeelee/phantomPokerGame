@@ -1,6 +1,7 @@
 package com.example.poker.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -8,6 +9,7 @@ import java.util.Random;
 import com.example.poker.model.GameState;
 import com.example.poker.model.Card;
 import java.util.List;
+import com.example.poker.repository.GameRoomRepository;
 
 @Service
 public class GameService {
@@ -55,35 +57,63 @@ public class GameService {
     }
 
     public boolean validateClaimFormat(String claim, int cardCount) {
-        // 实现声明格式验证逻辑
-        return claim.matches("^(BOMB|STRAIGHT|FLUSH|FULL_HOUSE|STRAIGHT_FLUSH|ROYAL_FLUSH)$") && cardCount <= 5 && cardCount >= 1;
+        // 验证声明格式与出牌数量是否匹配
+        if ("SINGLE".equals(claim)) {
+            return cardCount == 1;
+        } else if ("PAIR".equals(claim)) {
+            return cardCount == 2;
+        } else if ("TRIPLE".equals(claim)) {
+            return cardCount == 3;
+        } else if ("STRAIGHT".equals(claim)) {
+            return cardCount >= 5;
+        } else {
+            return false;
+        }
     }
-    
+
     public boolean validateCardCombination(List<Card> cards) {
-        // 实现卡牌组合验证逻辑
-        return cards.stream().allMatch(c -> c.getValue() != null);
+        // 验证卡牌组合是否符合游戏规则
+        return cards.stream().allMatch(card -> 
+            card.getRank() != null && 
+            card.getSuit() != null && 
+            card.getColor() != null
+        );
     }
-    
-    public void transferCardDeck(String playerId, List<Card> cards) {
-        // 实现卡牌转移逻辑
-        activeGames.values().stream()
-            .filter(g -> g.containsPlayer(playerId))
-            .findFirst()
-            .ifPresent(g -> g.addCardsToDeck(cards));
-    }
-    
-    public String getCurrentPlayer() {
-        // 实现当前玩家获取逻辑
+
+    public synchronized void transferCardDeck(String playerId, List<Card> cards) {
+    activeGames.values().stream()
+        .filter(game -> game.containsPlayer(playerId))
+        .findFirst()
+        .ifPresent(game -> {
+            game.getCurrentPile().addAll(cards);
+            game.getPlayerHands().get(playerId).removeAll(cards);
+        });
+}
+
+public String getCurrentPlayer() {
+    return activeGames.values().stream()
+        .findFirst()
+        .map(GameState::getCurrentPlayer)
+        .orElse(null);
+}
+
+public String getNextPlayer() {
+    return activeGames.values().stream()
+        .findFirst()
+        .map(state -> {
+            String current = state.getCurrentPlayer();
+            return state.getPlayers().stream()
+                .filter(p -> !p.equals(current))
+                .findFirst()
+                .orElse(current);
+        })
+        .orElse(null);
+}
+
+public boolean validateLastClaim(String playerId) {
+        // 验证玩家最后声明的牌型真实性
         return activeGames.values().stream()
-            .findFirst()
-            .map(GameState::getCurrentPlayer)
-            .orElse("system");
-    }
-    
-    public boolean validateLastClaim(String playerId) {
-        // 实现最后声明验证逻辑
-        return activeGames.values().stream()
-            .filter(g -> g.containsPlayer(playerId))
+            .filter(game -> game.containsPlayer(playerId))
             .findFirst()
             .map(GameState::validateLastClaim)
             .orElse(false);

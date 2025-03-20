@@ -3,6 +3,7 @@ package com.example.poker.controller;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.example.poker.model.GameState;
 import com.example.poker.model.PlayerAction;
 import com.example.poker.service.GameService;
@@ -24,7 +25,7 @@ public class GameController {
 
     @MessageMapping("/game/action")
     @SendTo("/topic/game-state")
-    public GameMessage handleAction(PlayerAction action) {
+    public GameMessage handleAction(GameMessage action) {
         switch(action.getActionType()) {
             case "PLAY":
                 return handlePlayCard(action.getPlayerId(), action.getClaim(), action.getCards());
@@ -41,8 +42,9 @@ public class GameController {
         // 解析前端卡牌数据结构
         List<Card> parsedCards = cards.stream()
             .map(card -> new Card(
+                card.split(",")[0],   // shape (suit)
                 card.split(",")[1],  // value (rank)
-                card.split(",")[0]   // shape (suit)
+                "",
                 card.split(",")[2]   // color
             ))
             .collect(Collectors.toList());
@@ -70,16 +72,38 @@ public class GameController {
     }
 
     public GameMessage handleChallenge(String challengerId, String targetPlayerId) {
-        // 检查最后声明的牌型真实性
+        // 验证目标玩家最后声明的牌型
         boolean isValid = gameService.validateLastClaim(targetPlayerId);
+        
+        // 处理挑战结果并更新游戏状态
         gameService.handleChallengeResult(challengerId, targetPlayerId, isValid);
+        
         return new GameMessage("CHALLENGE", challengerId, isValid, gameService.getNextPlayer());
     }
 
     public GameMessage handleFollow(String followerId, List<String> cards) {
-        // 处理跟牌逻辑
+        // 验证跟牌卡牌合法性
+        List<Card> parsedCards = parseCardList(cards);
+        if(!gameService.validateCardCombination(parsedCards)) {
+            return new GameMessage("ERROR", followerId, "跟牌卡牌不合法");
+        }
+        
+        // 更新卡牌堆和玩家手牌
         cardDeck.removeCards(followerId, cards);
+        gameService.transferCardDeck(followerId, parsedCards);
+        
         return new GameMessage("FOLLOW", followerId, cards, gameService.getNextPlayer());
+    }
+
+    private List<Card> parseCardList(List<String> cards) {
+        return cards.stream()
+            .map(card -> new Card(
+                card.split(",")[0],
+                card.split(",")[1],
+                "",
+                card.split(",")[2]
+            ))
+            .collect(Collectors.toList());
     }
 
     @MessageMapping("/game/init")

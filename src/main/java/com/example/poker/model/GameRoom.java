@@ -20,7 +20,7 @@ public class GameRoom {
         for(int i=0; i<deckCount; i++) {
             for(String suit : suits) {
                 for(String rank : ranks) {
-                    cardDeck.add(rank + suit);
+                    cardDeck.add(new Card(rank, suit,rank, suit.equals("♥") || suit.equals("♦") ? "red" : "black"));
                 }
             }
         }

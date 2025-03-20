@@ -16,7 +16,7 @@ public class CardDeck {
         for (int i = 0; i < numberOfDecks; i++) {
             for (String suit : suits) {
                 for (String rank : ranks) {
-                    fullDeck.add(rank + suit);
+                    fullDeck.add(new Card(rank, suit,rank, suit.equals("♥") || suit.equals("♦") ? "red" : "black"));
                 }
             }
         }
@@ -46,13 +46,16 @@ public class CardDeck {
         String claimedRank = parts[1];
         
         long actualCount = discardPile.stream()
-            .filter(card -> card.startsWith(claimedRank))
+            .filter(card -> card.getRank().equals(claimedRank))
             .count();
-        
         return actualCount >= claimedCount;
     }
 
     public void recordClaim(String playerId, String claim) {
         lastClaims.put(playerId, claim);
+    }
+
+    public boolean validateCardCombination(List<Card> cards) {
+        return cards.stream().allMatch(card -> card.getRank() != null && card.getSuit() != null);
     }
 }

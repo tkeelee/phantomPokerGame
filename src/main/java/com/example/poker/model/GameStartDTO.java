@@ -1,28 +1,13 @@
 package com.example.poker.model;
 
 import java.util.List;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Map;
 
-public class GameState {
-    public GameState() {
-        this.gameStatus = "WAITING";
-        this.players = new ArrayList<>();
-        this.playerHands = new HashMap<>();
-    }
-
-    public GameState(String player1, String player2) {
-        this.players.add(player1);
-        this.players.add(player2);
-        this.currentPlayer = player1;
-        this.gameStatus = "IN_PROGRESS";
-    }
-
+public class GameStartDTO {
     private String currentPlayer;
-    private List<String> players = new ArrayList<>();
-    private Map<String, List<Card>> playerHands = new HashMap<>();
-    private List<Card> currentPile = new ArrayList<>();
+    private List<String> players;
+    private Map<String, List<Card>> playerHands;
+    private List<Card> currentPile;
     private List<Card> selectedCards;
     private String declaredValue;
     private String hostId;
@@ -51,30 +36,5 @@ public class GameState {
     public void setHostId(String hostId) { this.hostId = hostId; }
 
     public String getGameStatus() { return gameStatus; }
-
-    public void penalizePlayer(String playerId) {
-        // 扣除玩家积分逻辑
-        // 实际扣分规则需要根据游戏规则实现
-        System.out.println("玩家 " + playerId + " 受到处罚");
-    }
-
-    public void nextPlayer() {
-        int currentIndex = players.indexOf(currentPlayer);
-        if(currentIndex != -1) {
-            currentIndex = (currentIndex + 1) % players.size();
-            currentPlayer = players.get(currentIndex);
-        }
-    }
-
-    public boolean containsPlayer(String playerId) {
-        return players.contains(playerId);
-    }
-
-    public boolean validateLastClaim() {
-        // 最后声明验证逻辑
-        return currentPile.stream().allMatch(card -> 
-            card.getRank().equals(declaredValue)
-        );
-    }
     public void setGameStatus(String gameStatus) { this.gameStatus = gameStatus; }
 }
