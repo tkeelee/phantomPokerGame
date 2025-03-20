@@ -1,0 +1,123 @@
+/* CSS Document */
+body, h1, h2, h3, h4, h5, h6, ol, ul, dl, dt, dd, textarea, p, form, input, select, b, em, li {
+    margin:0;
+    padding:0;
+}
+*{box-sizing:content-box}
+
+img {
+    border: none;
+    vertical-align: middle;
+}
+
+em,i{
+    font-style: normal;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-size: 100%;
+    font-weight:normal;
+}
+
+li {
+    list-style: none;
+}
+
+a {
+    text-decoration: none;
+}
+
+table {
+    border-collapse: collapse
+}
+
+input, textarea {
+    outline: none
+}
+input[type="submit"] {border:none;cursor:pointer;}
+ul {
+    list-style: none;
+}
+
+textarea {
+    resize: none;
+    overflow: auto;
+}
+
+body {
+    font-size:14px;
+    font-family: "微软雅黑";
+    background:#fafbfc;
+    color:#333;
+}
+
+.clear {
+    zoom: 1
+}
+
+.clear:after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+.fl {
+    float: left;
+}
+
+.fr {
+    float: right;
+}
+input:focus, textarea:focus {
+    outline: none;
+}
+input::-ms-clear {
+    display: none;
+}
+
+
+
+/*----------------------------------------common css----------------------------------------------*/
+.btn{width:40px; height:40px; text-align:center; border-radius:40px; background:#ed3939; line-height:40px;color:#fff; display:inline-block; cursor:pointer; font-size:16px;
+-webkit-transition:all .5s ease;-ms-transition:all .2s ease;-o-transition:all .2s ease;-moz-transition:all .2s ease;transition:all .2s ease;}
+.btn:hover{opacity:0.8;filter:alpha(opacity=80);-webkit-transform: scale(1.1);transform: scale(1.1);-mox-transform: scale(1.1);-ms-transform: scale(1.1);}
+
+/*----------------------------------------poke css----------------------------------------------*/
+html,body{width:100%; height:100%; position:absolute;}
+body{background:#014866; color:#fff;}
+.poke{border-collapse: collapse; border:1px solid #077aab;}
+.header h1{padding-left:20px; vertical-align: middle; color:#fff;text-shadow: 0 1px 1px rgba(0,0,0,.3);}
+.header h1 img{margin-right:10px;}
+.poke td{position:relative;}
+.hand{position:absolute; right:0 ;top:0; width:100px; height:30px; line-height:30px; background:#e6e6e6; color:#666; border-radius: 0 0 0 10px; text-align:center}
+.play li{ float:left;margin:10px 0 0 10px;}
+.play li .turn{background:#e2be60}
+.play li .pass{background:#5eb95e}
+.play li .sentence{background:#f37b1d}
+.h2_title{height:30px; background:#3bb4f2; line-height:30px; color:#fff; text-align: center;text-shadow: 0 1px 1px rgba(0,0,0,.3);}
+.collapse_win .joiner_num{text-align:center; line-height:30px; }
+.collapse_win dl dt{height:30px; border-bottom:1px solid #005281; line-height:30px; text-align: center;; background:#227fba; color:#fff; cursor: pointer;
+text-shadow: 0 1px 1px rgba(0,0,0,.3);-webkit-box-shadow: 0 1px 2px rgba(0,0,0,.2);-moz-box-shadow: 0 1px 2px rgba(0,0,0,.2);box-shadow: 0 1px 2px rgba(0,0,0,.2);}
+.collapse_win dl.online dd,.collapse_win dl.sort dd{padding-left:10px; font-size:12px; line-height:20px; /*border-bottom:1px solid #befaff;*/ color:#c7f8ff}
+.collapse_win dl.online dd:last-child,.collapse_win dl.sort dd:last-child{border-bottom: none}
+.chat_con{height:130px;overflow:auto; overflow-y:auto; font-size:12px;;}
+.chat_con li{padding:5px 5px 5px 10px;}
+.input_area{width:100%; text-align: center;}
+.input_text{width:70%;height:20px; padding:2px 0; vertical-align: middle;}
+.input_btn{vertical-align: middle; cursor:pointer;display:inline-block;background-color:#dd514c; height:28px; line-height: 28px; padding:0 2px; color:#fff;}
+.his_con{height:90%;overflow:auto; overflow-y:auto; padding:0 10px; }
+.his_con li{text-align: left;}
+.mypoke{position:relative; top:50px; left:20px; }
+.mypoke a,.current_poke a{position:absolute;width:61px; height:100px; background:#f7fcf8; box-shadow:0 1px 2px rgba(0,0,0,.2); display:inline-block; color:#666;border-radius:4px;}
+.mypoke a .lt{position:absolute; left:4px; top:4px;}
+.mypoke a .cm{width:20px; height:20px;position:absolute; left:50%; top:50%;margin-left:-6px; margin-top:-10px;}
+.mypoke a .rb{position:absolute; right:4px; bottom:4px;}
+.selTips{display: none;height:30px; line-height:30px;width: 220px;overflow: hidden; text-align:center; background:#3bb4f2;padding: 10px;}
+.selTips .selected_poke{ float:left;line-height:30px;}
+.selTips .selected_poke span em{display:inline-block; vertical-align:middle; line-height:20px;text-align: center; margin:0 4px; width:20px; height:20px; border-radius:10px; background:#5eb95e;}
+.selTips .sel_value{margin-left:20px; width:80px; height:21px;}
+.mainView{position:relative;}
+.topTips{ height:130px; width:600px;position:absolute; left:50% ;top:0; margin-left:-300px; border:1px solid #077aab; border-top:0; }
+.topTips h2{text-align: center;}
+.current_poke{padding:0 10px;}
+.current_poke a{background-image:url('../images/pokeback.png'); background-repeat: no-repeat; background-position: center center;}

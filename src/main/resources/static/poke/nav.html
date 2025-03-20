@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title></title>
+<link rel="stylesheet" href="css/common.css"/>
+<script src="plugins/jQuery/jquery-1.8.3.min.js"></script>
+<script src="plugins/placeholder/placeholder.js"></script>
+<script src="plugins/layer/layer.js"></script>
+<script src="js/common.js"></script>
+
+
+</head>
+<body>
+<table class="poke" width="100%" height="100%" border="1"  cellspacing="0" cellpadding="0">
+    <tr>
+        <td colspan="3" height="5%" class="header">
+           <h1><img src="images/icon.png"/>欢乐斗地主</h1>
+        </td>
+    </tr>
+    <tr>
+        <td class="mainView"  height="65%" style="width:70%; background:url('images/logobg.png') no-repeat 50% 50%">
+        <div class="topTips">
+        <h2>本次打出的牌</h2>
+        <div class="current_poke">
+
+
+
+        </div>
+        </div>
+
+        </td>
+        <td width="15%" valign="top" align="center" >
+        <h2 class="h2_title">
+            出牌历史
+        </h2>
+            <div class="his_con">
+            <ol>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+                <li>打出3个六打出3个六...</li>
+
+            </ol>
+            </div>
+
+        </td>
+        <td valign="top" class="collapse_win" style="background:#0488c8">
+            <p class="joiner_num">参与人数<span>4</span>人</p>
+            <div class="small_win">
+            <dl class="online">
+                <dt>在线玩家</dt>
+                <dd>玩家A</dd>
+                <dd>玩家B</dd>
+                <dd>玩家C</dd>
+            </dl>
+            <dl class="sort">
+            <dt>玩家排名</dt>
+                <dd>玩家A</dd>
+                <dd>玩家B</dd>
+                <dd>玩家C</dd>
+            </dl>
+            <dl class="chat">
+                <dt>聊天窗口</dt>
+                <dd>
+                <div class="chat_con">
+                 <ol>
+                     <li>我等得花儿都谢了~</li>
+                     <li>我等得花儿都谢了~</li>
+                 </ol>
+                </div>
+                    <div class="input_area">
+                        <!--<form action="" method="post" >-->
+                        <input type="text" value="" placeholder="输入聊天内容" name="input_text" class="input_text"/>
+                        <span class="input_btn">发送</span>
+                      <!--  </form>-->
+                    </div>
+
+                </dd>
+            </dl>
+            </div>
+
+
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2" height="30%" valign="top" >
+           <div class="hand">
+               <p>手牌数<span>10</span></p>
+           </div>
+
+            <div class="mypoke clear">
+                <!--黑桃（Spade）、红心（Heart）、梅花（Club）及方块（Diamond）-->
+                <a data-options='"poke_shape":"Spade","poke_color":"black","poke_value":"A","poke_owner":"zhangsan"'><span class="lt pv"></span><span class="cm"></span><span class="rb pv"></span></a>
+                <a data-options='"poke_shape":"Heart","poke_color":"red","poke_value":"K","poke_owner":"aaa"'><span class="lt pv"></span><span class="cm"></span><span class="rb pv"></span></a>
+                <a data-options='"poke_shape":"Club","poke_color":"black","poke_value":"Q","poke_owner":"bbb"'><span class="lt pv"></span><span class="cm"></span><span class="rb pv"></span></a>
+                <a data-options='"poke_shape":"Diamond","poke_color":"red","poke_value":"J","poke_owner":"ccc"'><span class="lt pv"></span><span class="cm"></span><span class="rb pv"></span></a>
+            </div>
+
+        </td>
+        <td valign="top" style="background:#0488c8">
+
+<ul class="play">
+    <li><span class="btn turn ">出</span></li>
+    <li><span class="btn pass">过</span></li>
+    <li><span class="btn sentence">判</span></li>
+</ul>
+
+        </td>
+    </tr>
+
+</table>
+
+<div class="selTips">
+<div class="selected_poke">
+<span>你选择了<em></em>张牌</span>
+</div>
+<select class="sel_value">
+    <option value="0">选择点数</option>
+    <option value="1">1点</option>
+    <option value="2">2点</option>
+    <option value="3">3点</option>
+    <option value="4">4点</option>
+    <option value="5">5点</option>
+    <option value="6">6点</option>
+    <option value="7">7点</option>
+    <option value="8">8点</option>
+    <option value="9">9点</option>
+    <option value="10">10点</option>
+    <option value="11">11点</option>
+    <option value="12">12点</option>
+    <option value="13">13点</option>
+</select>
+
+</div>
+
+</body>
+</html>

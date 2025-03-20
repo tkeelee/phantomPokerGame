@@ -1,0 +1,53 @@
+/* 卡片基础样式 */
+.card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* 选中状态 */
+.card.selected {
+  border: 2px solid #4CAF50;
+  transform: translateY(-10px);
+}
+
+/* 出牌动画 */
+@keyframes playCard {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100px) rotate(15deg); opacity: 0; }
+}
+
+.play-animation {
+  animation: playCard 0.5s forwards;
+}
+
+/* 玩家状态指示器 */
+.player-status {
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+}
+
+.status-online { background: #4CAF50; color: white; }
+.status-offline { background: #9E9E9E; color: white; }
+.status-current { background: #2196F3; color: white; }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .card {
+    width: 60px;
+    height: 84px;
+  }
+  
+  .player-panel {
+    flex-direction: column;
+    align-items: center;
+  }
+}
