@@ -20,6 +20,9 @@ public class GameState {
     private String lastClaim;  // 最后声明
     private List<Card> selectedCards;  // 选中的牌
     private String declaredValue;  // 声明的牌值
+    private List<String> passedPlayers;  // 已经过牌的玩家
+    private String lastPlayerId;  // 上次出牌的玩家
+    private List<String> winners;  // 已打完手牌的玩家列表（按顺序）
 
     public GameState() {
         this.players = new ArrayList<>();
@@ -29,6 +32,8 @@ public class GameState {
         this.gameStatus = "WAITING";
         this.currentPlayerIndex = 0;
         this.selectedCards = new ArrayList<>();
+        this.passedPlayers = new ArrayList<>();
+        this.winners = new ArrayList<>();
     }
 
     public String getRoomId() {
@@ -137,6 +142,59 @@ public class GameState {
         this.declaredValue = declaredValue;
     }
 
+    public List<String> getPassedPlayers() {
+        return passedPlayers;
+    }
+
+    public void setPassedPlayers(List<String> passedPlayers) {
+        this.passedPlayers = passedPlayers;
+    }
+
+    public String getLastPlayerId() {
+        return lastPlayerId;
+    }
+
+    public void setLastPlayerId(String lastPlayerId) {
+        this.lastPlayerId = lastPlayerId;
+    }
+
+    /**
+     * 添加一个过牌的玩家
+     * @param playerId 过牌的玩家ID
+     */
+    public void addPassedPlayer(String playerId) {
+        if (!passedPlayers.contains(playerId)) {
+            passedPlayers.add(playerId);
+        }
+    }
+
+    /**
+     * 清空过牌玩家列表
+     */
+    public void clearPassedPlayers() {
+        passedPlayers.clear();
+    }
+
+    /**
+     * 检查是否所有玩家都已过牌（除当前玩家外）
+     * @return 是否所有其他玩家都已过牌
+     */
+    public boolean haveAllPlayersPassed() {
+        // 如果没有其他玩家，则返回false
+        if (players.size() <= 1) {
+            return false;
+        }
+        
+        // 检查除当前玩家外的所有玩家是否都已过牌
+        for (String player : players) {
+            if (!player.equals(currentPlayer) && !passedPlayers.contains(player)) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
     public String getNextPlayer() {
         if (players != null && !players.isEmpty()) {
             int nextIndex = (currentPlayerIndex + 1) % players.size();
@@ -160,5 +218,13 @@ public class GameState {
         return currentPile.stream().allMatch(card -> 
             card.getRank().equals(lastClaim)
         );
+    }
+
+    public List<String> getWinners() {
+        return winners;
+    }
+
+    public void setWinners(List<String> winners) {
+        this.winners = winners;
     }
 }

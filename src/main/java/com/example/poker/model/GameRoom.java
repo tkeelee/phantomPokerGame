@@ -139,13 +139,15 @@ public class GameRoom {
             return false;
         }
         
-        // 检查是否有玩家手牌为空
-        for (List<Card> hand : playerHands.values()) {
-            if (hand.isEmpty()) {
-                return true;
+        // 游戏结束条件：只剩下1名玩家有手牌
+        int playersWithCards = 0;
+        for (String playerId : players) {
+            List<Card> hand = playerHands.get(playerId);
+            if (hand != null && !hand.isEmpty()) {
+                playersWithCards++;
             }
         }
         
-        return false;
+        return playersWithCards <= 1;
     }
 } 

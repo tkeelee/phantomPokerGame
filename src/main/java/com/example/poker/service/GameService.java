@@ -258,6 +258,14 @@ public class GameService {
             throw new RuntimeException("你没有这些牌");
         }
         
+        // 如果已有上一玩家出牌且有声明值，则当前玩家必须遵守相同的声明值
+        // 除非所有其他玩家都已过牌，此时玩家可以自由选择牌值
+        if (state.getDeclaredValue() != null && !state.haveAllPlayersPassed()) {
+            if (!message.getDeclaredValue().equals(state.getDeclaredValue())) {
+                throw new RuntimeException("必须声明与上一玩家相同的牌值: " + state.getDeclaredValue());
+            }
+        }
+        
         // 从玩家手牌中移除这些牌
         removeCards(playerCards, selectedCards);
         
@@ -269,6 +277,23 @@ public class GameService {
                            "打出" + message.getDeclaredCount() + 
                            "张" + message.getDeclaredValue());
         state.setDeclaredValue(message.getDeclaredValue());
+        
+        // 记录上一次出牌的玩家ID
+        state.setLastPlayerId(message.getPlayerId());
+        
+        // 清空过牌玩家列表，因为新的一轮出牌开始了
+        state.clearPassedPlayers();
+        
+        // 检查是否有其他玩家已经打完手牌但仍在等待确认
+        // 当其他玩家出牌后，这些玩家满足"被质疑失败或其他玩家出牌"的条件
+        List<String> pendingWinners = new ArrayList<>(state.getWinners());
+        for (String winner : pendingWinners) {
+            // 如果赢家不是当前出牌的玩家，且仍在玩家列表中
+            if (!winner.equals(message.getPlayerId()) && state.getPlayers().contains(winner)) {
+                // 将该玩家从当前玩家列表中移除（确认胜利）
+                state.getPlayers().remove(winner);
+            }
+        }
         
         // 检查是否胜利（手牌为空）
         if (playerCards.isEmpty()) {
@@ -330,21 +355,43 @@ public class GameService {
             // 质疑成功，出牌者收走底盘
             String targetPlayerId = message.getTargetPlayerId(); // 被质疑的玩家
             punishPlayer(state, targetPlayerId);
+            
+            // 如果被质疑的玩家之前已经打完手牌（手牌为空但仍在players列表中等待确认）
+            // 则需要将其从winners列表中移除，因为质疑成功意味着他需要重新开始
+            List<Card> targetPlayerHand = state.getPlayerHands().get(targetPlayerId);
+            if (targetPlayerHand.isEmpty() && state.getWinners().contains(targetPlayerId)) {
+                state.getWinners().remove(targetPlayerId);
+            }
+            
             // 质疑玩家获得出牌权
             state.setCurrentPlayer(message.getPlayerId());
             state.setCurrentPlayerIndex(state.getPlayers().indexOf(message.getPlayerId()));
         } else {
             // 质疑失败，质疑者收走底盘
             punishPlayer(state, message.getPlayerId());
+            // 被质疑玩家ID
+            String targetPlayerId = message.getTargetPlayerId();
             // 出牌者获得出牌权
-            state.setCurrentPlayer(message.getTargetPlayerId());
-            state.setCurrentPlayerIndex(state.getPlayers().indexOf(message.getTargetPlayerId()));
+            state.setCurrentPlayer(targetPlayerId);
+            state.setCurrentPlayerIndex(state.getPlayers().indexOf(targetPlayerId));
+            
+            // 如果被质疑的玩家手牌为空，且在winners列表中，此时应确认其真正赢得比赛
+            // 因为他被质疑但质疑失败，满足"出完手牌后无人质疑成功"的条件
+            List<Card> targetPlayerHand = state.getPlayerHands().get(targetPlayerId);
+            if (targetPlayerHand.isEmpty() && state.getWinners().contains(targetPlayerId)) {
+                // 将玩家从游戏中移除，但保留在winners列表中
+                state.getPlayers().remove(targetPlayerId);
+            }
         }
         
         // 清空当前牌堆
         state.getCurrentPile().clear();
         state.setLastClaim(null);
         state.setDeclaredValue(null);
+        state.setLastPlayerId(null);
+        
+        // 清空过牌玩家列表，因为新的一轮开始了
+        state.clearPassedPlayers();
         
         // 发送状态更新
         sendGameStateUpdate(roomId);
@@ -380,10 +427,19 @@ public class GameService {
             throw new RuntimeException("不是你的回合");
         }
         
+        // 记录该玩家已过牌
+        state.addPassedPlayer(playerId);
+        
         // 切换到下一个玩家
         int nextIndex = (state.getPlayers().indexOf(playerId) + 1) % state.getPlayers().size();
         state.setCurrentPlayer(state.getPlayers().get(nextIndex));
         state.setCurrentPlayerIndex(nextIndex);
+        
+        // 如果下一个玩家是最初出牌的玩家，说明已经轮了一圈都过牌了
+        // 此时清空过牌记录，给这个玩家重新出牌的自由度
+        if (nextIndex == state.getPlayers().indexOf(state.getLastPlayerId())) {
+            state.clearPassedPlayers();
+        }
         
         // 发送状态更新
         sendGameStateUpdate(roomId);
@@ -506,11 +562,25 @@ public class GameService {
         GameState state = gameStates.get(roomId);
         
         if (room != null && state != null) {
-            // 移除胜利的玩家
-            state.getPlayers().remove(playerId);
+            // 检查是否有人质疑当前出牌
+            if (state.getLastClaim() != null && state.getLastPlayerId() != null 
+                && state.getLastPlayerId().equals(playerId)) {
+                // 添加玩家到胜利列表，但不从游戏中移除
+                // 只有当被质疑失败或其他玩家出牌后，才算真正胜利
+                if (!state.getWinners().contains(playerId)) {
+                    state.getWinners().add(playerId);
+                }
+            } else {
+                // 如果是被质疑失败或其他玩家已出牌，则算真正胜利
+                // 将玩家从当前玩家列表中移除，但保留在胜利列表中
+                if (!state.getWinners().contains(playerId)) {
+                    state.getWinners().add(playerId);
+                }
+                state.getPlayers().remove(playerId);
+            }
             
-            // 如果只剩最后一个玩家，游戏结束
-            if (state.getPlayers().size() <= 1) {
+            // 如果只剩最后一个玩家有手牌，游戏结束
+            if (room.checkGameEnd()) {
                 room.setStatus(GameStatus.FINISHED);
                 state.setStatus(GameStatus.FINISHED);
                 state.setGameStatus("FINISHED");

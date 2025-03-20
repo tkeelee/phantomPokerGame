@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 游戏WebSocket控制器
@@ -13,6 +15,8 @@ import org.springframework.stereotype.Controller;
  */
 @Controller
 public class GameWebSocketController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(GameWebSocketController.class);
     
     @Autowired
     private GameService gameService;
@@ -57,13 +61,20 @@ public class GameWebSocketController {
                     message.setSuccess(false);
                     message.setMessage("未知的动作类型");
                     messagingTemplate.convertAndSendToUser(message.getPlayerId(), "/queue/errors", message);
+                    messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), createErrorNotification(message.getPlayerId(), "未知的动作类型"));
                     break;
             }
         } catch (Exception e) {
+            // 记录异常日志
+            logger.error("处理游戏动作时发生错误: {}", e.getMessage(), e);
+            
             // 处理异常
             message.setSuccess(false);
             message.setMessage(e.getMessage());
             messagingTemplate.convertAndSendToUser(message.getPlayerId(), "/queue/errors", message);
+            
+            // 发送通知给房间中的所有玩家
+            messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), createErrorNotification(message.getPlayerId(), e.getMessage()));
         }
     }
     
@@ -72,11 +83,43 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handlePlayCards(GameMessage message) {
-        gameService.playCards(message.getRoomId(), message);
-        
-        // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
-        messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        try {
+            gameService.playCards(message.getRoomId(), message);
+            
+            // 发送游戏状态更新
+            GameState state = gameService.getGameState(message.getRoomId());
+            messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+            
+            // 发送出牌通知
+            GameNotification notification = new GameNotification();
+            notification.setType("PLAY");
+            notification.setPlayerId(message.getPlayerId());
+            notification.setContent("玩家 " + message.getPlayerId() + " 打出了 " + message.getDeclaredCount() + " 张 " + message.getDeclaredValue());
+            messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
+            
+            // 检查游戏是否结束
+            GameRoom room = gameService.getRoom(message.getRoomId());
+            if (room.getStatus() == GameStatus.FINISHED) {
+                // 游戏结束，发送结束通知
+                GameNotification endNotification = new GameNotification();
+                endNotification.setType("GAME_END");
+                // 构建排名信息
+                StringBuilder rankInfo = new StringBuilder("游戏结束！排名：");
+                // 首先列出获胜者
+                for (int i = 0; i < state.getWinners().size(); i++) {
+                    rankInfo.append("\n第").append(i + 1).append("名: 玩家").append(state.getWinners().get(i));
+                }
+                // 如果还有剩下的玩家，他们就是最后一名
+                if (!state.getPlayers().isEmpty()) {
+                    rankInfo.append("\n最后一名: 玩家").append(state.getPlayers().get(0));
+                }
+                endNotification.setContent(rankInfo.toString());
+                messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), endNotification);
+            }
+        } catch (Exception e) {
+            logger.error("处理出牌动作时发生错误: {}", e.getMessage(), e);
+            throw e; // 重新抛出异常，让全局异常处理器处理
+        }
     }
     
     /**
@@ -84,11 +127,23 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handlePass(GameMessage message) {
-        gameService.pass(message.getRoomId(), message.getPlayerId());
-        
-        // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
-        messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        try {
+            gameService.pass(message.getRoomId(), message.getPlayerId());
+            
+            // 发送游戏状态更新
+            GameState state = gameService.getGameState(message.getRoomId());
+            messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+            
+            // 发送过牌通知
+            GameNotification notification = new GameNotification();
+            notification.setType("PASS");
+            notification.setPlayerId(message.getPlayerId());
+            notification.setContent("玩家 " + message.getPlayerId() + " 选择了过牌");
+            messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
+        } catch (Exception e) {
+            logger.error("处理过牌动作时发生错误: {}", e.getMessage(), e);
+            throw e; // 重新抛出异常，让全局异常处理器处理
+        }
     }
     
     /**
@@ -96,11 +151,43 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handleChallenge(GameMessage message) {
-        gameService.challenge(message.getRoomId(), message);
-        
-        // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
-        messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        try {
+            gameService.challenge(message.getRoomId(), message);
+            
+            // 发送游戏状态更新
+            GameState state = gameService.getGameState(message.getRoomId());
+            messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+            
+            // 发送质疑通知
+            GameNotification notification = new GameNotification();
+            notification.setType("CHALLENGE");
+            notification.setPlayerId(message.getPlayerId());
+            notification.setContent("玩家 " + message.getPlayerId() + " 对玩家 " + message.getTargetPlayerId() + " 的声明提出质疑");
+            messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
+            
+            // 检查游戏是否结束
+            GameRoom room = gameService.getRoom(message.getRoomId());
+            if (room.getStatus() == GameStatus.FINISHED) {
+                // 游戏结束，发送结束通知
+                GameNotification endNotification = new GameNotification();
+                endNotification.setType("GAME_END");
+                // 构建排名信息
+                StringBuilder rankInfo = new StringBuilder("游戏结束！排名：");
+                // 首先列出获胜者
+                for (int i = 0; i < state.getWinners().size(); i++) {
+                    rankInfo.append("\n第").append(i + 1).append("名: 玩家").append(state.getWinners().get(i));
+                }
+                // 如果还有剩下的玩家，他们就是最后一名
+                if (!state.getPlayers().isEmpty()) {
+                    rankInfo.append("\n最后一名: 玩家").append(state.getPlayers().get(0));
+                }
+                endNotification.setContent(rankInfo.toString());
+                messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), endNotification);
+            }
+        } catch (Exception e) {
+            logger.error("处理质疑动作时发生错误: {}", e.getMessage(), e);
+            throw e; // 重新抛出异常，让全局异常处理器处理
+        }
     }
     
     /**
@@ -113,6 +200,13 @@ public class GameWebSocketController {
         // 发送游戏状态更新
         GameState state = gameService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        
+        // 发送加入通知
+        GameNotification notification = new GameNotification();
+        notification.setType("JOIN");
+        notification.setPlayerId(message.getPlayerId());
+        notification.setContent("玩家 " + message.getPlayerId() + " 加入了房间");
+        messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
     }
     
     /**
@@ -125,6 +219,13 @@ public class GameWebSocketController {
         // 发送游戏状态更新
         GameState state = gameService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        
+        // 发送准备通知
+        GameNotification notification = new GameNotification();
+        notification.setType("READY");
+        notification.setPlayerId(message.getPlayerId());
+        notification.setContent("玩家 " + message.getPlayerId() + " 已准备");
+        messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
     }
     
     /**
@@ -138,6 +239,13 @@ public class GameWebSocketController {
         // 发送游戏状态更新
         GameState state = gameService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+        
+        // 发送开始游戏通知
+        GameNotification notification = new GameNotification();
+        notification.setType("START");
+        notification.setPlayerId(message.getPlayerId());
+        notification.setContent("游戏开始！玩家 " + state.getCurrentPlayer() + " 先手");
+        messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
     }
     
     /**
@@ -151,8 +259,16 @@ public class GameWebSocketController {
         try {
             GameState state = gameService.getGameState(message.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
+            
+            // 发送离开通知
+            GameNotification notification = new GameNotification();
+            notification.setType("LEAVE");
+            notification.setPlayerId(message.getPlayerId());
+            notification.setContent("玩家 " + message.getPlayerId() + " 离开了房间");
+            messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
         } catch (Exception e) {
-            // 房间可能已经不存在，忽略异常
+            // 房间可能已经被删除，忽略异常
+            logger.info("房间 {} 可能已经被删除", message.getRoomId());
         }
     }
     
@@ -161,10 +277,25 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handleChat(GameMessage message) {
-        // 简单地将聊天消息广播给房间内所有人
-        GameMessage chatResponse = new GameMessage("CHAT", message.getPlayerId());
-        chatResponse.setContent(message.getContent());
-        chatResponse.setRoomId(message.getRoomId());
-        messagingTemplate.convertAndSend("/topic/chat/" + message.getRoomId(), chatResponse);
+        // 发送聊天消息
+        GameNotification notification = new GameNotification();
+        notification.setType("CHAT");
+        notification.setPlayerId(message.getPlayerId());
+        notification.setContent(message.getContent());
+        messagingTemplate.convertAndSend("/topic/game/chat/" + message.getRoomId(), notification);
+    }
+    
+    /**
+     * 创建错误通知
+     * @param playerId 玩家ID
+     * @param errorMessage 错误信息
+     * @return 通知对象
+     */
+    private GameNotification createErrorNotification(String playerId, String errorMessage) {
+        GameNotification notification = new GameNotification();
+        notification.setType("ERROR");
+        notification.setPlayerId(playerId);
+        notification.setContent(errorMessage);
+        return notification;
     }
 } 
