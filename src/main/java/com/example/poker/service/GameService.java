@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameService {
     private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
     private final Map<String, GameState> gameStates = new ConcurrentHashMap<>();
+    private String currentRoomId;
     
     @Autowired
     private DeckService deckService;
@@ -63,7 +64,7 @@ public class GameService {
     public GameRoom joinRoom(String roomId, String playerId) {
         GameRoom room = rooms.get(roomId);
         if (room == null) {
-            throw new GameException("房间不存在", "ROOM_NOT_FOUND");
+            throw new GameException("房间不存在："+roomId, "ROOM_NOT_FOUND");
         }
         if (room.getStatus() != GameStatus.WAITING) {
             throw new GameException("游戏已开始，无法加入", "GAME_ALREADY_STARTED");
@@ -619,6 +620,233 @@ public class GameService {
         GameState state = gameStates.get(roomId);
         if (state != null && messagingTemplate != null) {
             messagingTemplate.convertAndSend("/topic/game/state/" + roomId, state);
+        }
+    }
+
+    /**
+     * 添加机器人到房间
+     * @param roomId 房间ID
+     * @param count 机器人数量
+     * @param difficulty 机器人难度
+     */
+    public void addRobotsToRoom(String roomId, int count, String difficulty) {
+        GameRoom room = rooms.get(roomId);
+        if (room == null) {
+            throw new IllegalArgumentException("房间不存在");
+        }
+
+        // 检查是否是房主
+        if (!room.getHostId().equals(getCurrentPlayerId())) {
+            throw new IllegalStateException("只有房主可以添加机器人");
+        }
+
+        // 检查游戏状态
+        if (room.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("只能在等待状态添加机器人");
+        }
+
+        // 检查玩家数量限制
+        if (room.getPlayers().size() + count > room.getMaxPlayers()) {
+            throw new IllegalStateException("添加机器人后超过最大玩家数");
+        }
+
+        // 检查难度设置
+        if (!isValidDifficulty(difficulty)) {
+            throw new IllegalArgumentException("无效的机器人难度设置");
+        }
+
+        room.addRobots(count, difficulty);
+        
+        // 广播房间状态更新
+        broadcastRoomState(room);
+    }
+
+    /**
+     * 检查机器人难度设置是否有效
+     * @param difficulty 难度设置
+     * @return 是否有效
+     */
+    private boolean isValidDifficulty(String difficulty) {
+        return difficulty != null && 
+               (difficulty.equals("EASY") || 
+                difficulty.equals("MEDIUM") || 
+                difficulty.equals("HARD"));
+    }
+
+    /**
+     * 移除房间中的所有机器人
+     * @param roomId 房间ID
+     */
+    public void removeRobotsFromRoom(String roomId) {
+        GameRoom room = rooms.get(roomId);
+        if (room == null) {
+            throw new IllegalArgumentException("房间不存在");
+        }
+
+        // 检查是否是房主
+        if (!room.getHostId().equals(getCurrentPlayerId())) {
+            throw new IllegalStateException("只有房主可以移除机器人");
+        }
+
+        // 检查游戏状态
+        if (room.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("只能在等待状态移除机器人");
+        }
+
+        room.removeAllRobots();
+        
+        // 广播房间状态更新
+        broadcastRoomState(room);
+    }
+
+    /**
+     * 处理机器人的回合
+     * @param room 游戏房间
+     * @param gameState 游戏状态
+     */
+    private void handleRobotTurn(GameRoom room, GameState gameState) {
+        String currentPlayerId = room.getCurrentPlayerId();
+        if (!room.isRobot(currentPlayerId)) {
+            return;
+        }
+
+        try {
+            // 创建机器人玩家实例
+            RobotPlayer robot = new RobotPlayer(
+                currentPlayerId,
+                "机器人" + currentPlayerId.substring(6), // 从"robot_X"中提取数字
+                room.getRobotDifficulty()
+            );
+            robot.setHand(gameState.getPlayerHands().get(currentPlayerId));
+
+            // 获取上一个声明
+            String lastClaim = room.getLastClaim();
+            List<Card> currentPile = gameState.getCurrentPile();
+
+            // 根据难度设置延迟时间
+            int delay = switch (room.getRobotDifficulty()) {
+                case "EASY" -> 2000;    // 简单模式延迟2秒
+                case "MEDIUM" -> 1500;  // 中等模式延迟1.5秒
+                case "HARD" -> 1000;    // 困难模式延迟1秒
+                default -> 1500;
+            };
+
+            // 延迟执行，让玩家能看清机器人的操作
+            Thread.sleep(delay);
+
+            // 决定是否质疑上一个玩家
+            if (lastClaim != null && !currentPile.isEmpty() && robot.decideToChallenge(lastClaim, currentPile)) {
+                // 机器人选择质疑
+                handleChallenge(room.getId(), currentPlayerId);
+                return;
+            }
+
+            // 选择要打出的牌
+            List<Card> selectedCards = robot.selectCardsToPlay(lastClaim);
+            if (selectedCards.isEmpty()) {
+                // 机器人选择过牌
+                handlePass(room.getId(), currentPlayerId);
+                return;
+            }
+
+            // 生成声明
+            String claim = robot.generateClaim(selectedCards, lastClaim);
+            
+            // 执行出牌
+            handlePlayCards(room.getId(), currentPlayerId, selectedCards, claim);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            // 如果被中断，让下一个玩家继续
+            String nextPlayerId = room.getNextPlayerId();
+            if (nextPlayerId != null) {
+                gameState.setCurrentPlayer(nextPlayerId);
+                gameState.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
+                sendGameStateUpdate(room.getId());
+            }
+        } catch (Exception e) {
+            // 处理其他异常，记录错误并让下一个玩家继续
+            System.err.println("机器人回合处理出错: " + e.getMessage());
+            e.printStackTrace();
+            String nextPlayerId = room.getNextPlayerId();
+            if (nextPlayerId != null) {
+                gameState.setCurrentPlayer(nextPlayerId);
+                gameState.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
+                sendGameStateUpdate(room.getId());
+            }
+        }
+    }
+
+    /**
+     * 修改原有的handlePlayCards方法，在处理完玩家出牌后检查下一个玩家是否是机器人
+     */
+    public void handlePlayCards(String roomId, String playerId, List<Card> cards, String claim) {
+        // ... 原有的出牌处理逻辑 ...
+
+        // 在处理完出牌后，检查下一个玩家是否是机器人
+        GameRoom room = rooms.get(roomId);
+        GameState gameState = gameStates.get(roomId);
+        
+        String nextPlayerId = room.getNextPlayerId();
+        if (room.isRobot(nextPlayerId)) {
+            // 如果下一个玩家是机器人，执行机器人的回合
+            handleRobotTurn(room, gameState);
+        }
+    }
+
+    /**
+     * 修改原有的handleChallenge方法，在处理完质疑后检查下一个玩家是否是机器人
+     */
+    public void handleChallenge(String roomId, String playerId) {
+        // ... 原有的质疑处理逻辑 ...
+
+        // 在处理完质疑后，检查下一个玩家是否是机器人
+        GameRoom room = rooms.get(roomId);
+        GameState gameState = gameStates.get(roomId);
+        
+        String nextPlayerId = room.getNextPlayerId();
+        if (room.isRobot(nextPlayerId)) {
+            // 如果下一个玩家是机器人，执行机器人的回合
+            handleRobotTurn(room, gameState);
+        }
+    }
+
+    /**
+     * 修改原有的handlePass方法，在处理完过牌后检查下一个玩家是否是机器人
+     */
+    public void handlePass(String roomId, String playerId) {
+        // ... 原有的过牌处理逻辑 ...
+
+        // 在处理完过牌后，检查下一个玩家是否是机器人
+        GameRoom room = rooms.get(roomId);
+        GameState gameState = gameStates.get(roomId);
+        
+        String nextPlayerId = room.getNextPlayerId();
+        if (room.isRobot(nextPlayerId)) {
+            // 如果下一个玩家是机器人，执行机器人的回合
+            handleRobotTurn(room, gameState);
+        }
+    }
+
+    /**
+     * 获取当前玩家ID
+     * @return 当前玩家ID
+     */
+    private String getCurrentPlayerId() {
+        // 从当前房间状态中获取当前玩家ID
+        GameState state = gameStates.get(currentRoomId);
+        if (state != null) {
+            return state.getCurrentPlayer();
+        }
+        return null;
+    }
+
+    /**
+     * 广播房间状态更新
+     * @param room 游戏房间
+     */
+    private void broadcastRoomState(GameRoom room) {
+        if (messagingTemplate != null) {
+            messagingTemplate.convertAndSend("/topic/room/" + room.getId(), room);
         }
     }
 }

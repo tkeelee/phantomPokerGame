@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title>幻影扑克 - 游戏</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css"/>
+    <script src="plugins/jQuery/jquery-1.8.3.min.js"></script>
+    <script src="plugins/placeholder/placeholder.js"></script>
+    <script src="plugins/layer/layer.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body class="game-page">
+    <div class="game-container">
+        <!-- 顶部状态栏 -->
+        <div class="game-header">
+            <div class="room-info">
+                <h2 id="roomInfo"></h2>
+                <span id="gameStatus" class="badge bg-secondary">等待中</span>
+            </div>
+            <div class="player-info">
+                <span id="currentPlayer"></span>
+                <button onclick="leaveRoom()" class="btn btn-outline-danger">离开房间</button>
+            </div>
+        </div>
+
+        <!-- 游戏主区域 -->
+        <div class="game-main">
+            <!-- 左侧：玩家列表和聊天 -->
+            <div class="game-sidebar">
+                <div class="player-list-card">
+                    <h3>玩家列表</h3>
+                    <div id="playerList" class="player-list"></div>
+                    <!-- 准备按钮 -->
+                    <button id="readyBtn" onclick="toggleReady()" class="btn btn-primary w-100 mt-2">准备</button>
+                    <!-- 房主控制面板 -->
+                    <div id="hostControls" class="host-controls" style="display: none;">
+                        <h4>房主控制</h4>
+                        <div class="robot-controls">
+                            <div class="mb-2">
+                                <label class="form-label">机器人数量</label>
+                                <input type="number" id="robotCount" class="form-control" min="1" max="3" value="1">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">机器人难度</label>
+                                <select id="robotDifficulty" class="form-select">
+                                    <option value="EASY">简单</option>
+                                    <option value="MEDIUM">中等</option>
+                                    <option value="HARD">困难</option>
+                                </select>
+                            </div>
+                            <div class="d-grid gap-2">
+                                <button onclick="addRobots()" class="btn btn-primary">添加机器人</button>
+                                <button onclick="removeRobots()" class="btn btn-danger">移除机器人</button>
+                            </div>
+                        </div>
+                        <button id="startBtn" onclick="startGame()" class="btn btn-success w-100 mt-2" style="display: none;">开始游戏</button>
+                    </div>
+                </div>
+                <div class="chat-card">
+                    <h3>聊天</h3>
+                    <div id="chatMessages" class="chat-messages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" class="form-control" placeholder="输入消息...">
+                        <button onclick="sendMessage()" class="btn btn-primary">发送</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间：游戏区域 -->
+            <div class="game-center">
+                <div class="current-pile-section">
+                    <h3>当前牌堆</h3>
+                    <div id="currentPile" class="current-pile"></div>
+                    <div id="lastClaim" class="last-claim">上一声明: <span></span></div>
+                </div>
+                <div class="game-history-section">
+                    <h3>出牌历史</h3>
+                    <div id="historyList" class="history-list"></div>
+                </div>
+            </div>
+
+            <!-- 右侧：手牌区域 -->
+            <div class="game-hand">
+                <div class="hand-info">
+                    <h3>我的手牌</h3>
+                    <span id="handCount" class="badge bg-primary">0张</span>
+                </div>
+                <div id="gameControls" class="game-controls" style="display: none;">
+                    <div class="card-selection-controls">
+                        <div class="declared-value">
+                            <label for="declaredValue">声明牌值:</label>
+                            <select id="declaredValue" class="form-select">
+                                <option value="1">A</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">J</option>
+                                <option value="12">Q</option>
+                                <option value="13">K</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button onclick="selectAllSameValue()" class="btn btn-outline-primary">选择相同点数</button>
+                            <button onclick="clearSelection()" class="btn btn-outline-secondary">清除选择</button>
+                        </div>
+                    </div>
+                    <div id="playerHand" class="player-hand"></div>
+                    <div class="game-actions">
+                        <button id="playBtn" onclick="playCards()" class="btn btn-success" disabled>出牌</button>
+                        <button id="passBtn" onclick="pass()" class="btn btn-warning" disabled>过牌</button>
+                        <button id="challengeBtn" onclick="challenge()" class="btn btn-danger" disabled>质疑</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏结果弹窗 -->
+    <div class="modal fade" id="gameResultModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">游戏结束</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="playerRankingFinal"></div>
+                </div>
+                <div class="modal-footer">
+                    <button onclick="restartGame()" class="btn btn-primary">再来一局</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音频资源 -->
+    <audio id="cardSound" src="sounds/card.mp3" preload="auto"></audio>
+    <audio id="winSound" src="sounds/win.mp3" preload="auto"></audio>
+    <audio id="loseSound" src="sounds/lose.mp3" preload="auto"></audio>
+    <audio id="challengeSound" src="sounds/challenge.mp3" preload="auto"></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html> 
