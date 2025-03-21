@@ -25,6 +25,7 @@ public class GameState {
     private String lastPlayerId;  // 上次出牌的玩家
     private List<String> winners;  // 已打完手牌的玩家列表（按顺序）
     private String winner;
+    private String roomName;  // 房间名称
     
     // 上一次出牌信息
     private List<Card> lastPlayedCards;
@@ -348,5 +349,13 @@ public class GameState {
 
     public void setLastChallengeHands(Map<String, List<Card>> lastChallengeHands) {
         this.lastChallengeHands = lastChallengeHands;
+    }
+
+    public String getRoomName() {
+        return roomName;
+    }
+
+    public void setRoomName(String roomName) {
+        this.roomName = roomName;
     }
 }

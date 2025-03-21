@@ -1,3 +1,7 @@
+/**
+ * 通用工具函数
+ */
+
 // 全局变量管理
 const GameState = {
     currentPlayer: null,
@@ -7,7 +11,87 @@ const GameState = {
     soundEnabled: true,
     isHost: false,
     gameStarted: false,
-    stompClient: null
+    stompClient: null,
+    player: null,
+    room: null,
+    isConnected: false,
+    playerId: '',
+    roomId: '',
+    roomName: '',
+    // 连接WebSocket服务器
+    connect: function(username, successCallback, errorCallback) {
+        try {
+            console.log('正在连接WebSocket服务器...');
+            
+            // 配置WebSocket连接（使用SockJS作为回退选项）
+            const socket = new SockJS('/ws');
+            this.stompClient = Stomp.over(socket);
+            
+            // 设置STOMP客户端连接头
+            const headers = {
+                login: username  // 设置用户名
+            };
+            
+            console.log('连接头信息:', JSON.stringify(headers));
+            
+            // 连接到STOMP broker
+            this.stompClient.connect(headers, 
+                // 连接成功回调
+                (frame) => {
+                    console.log('WebSocket连接成功:', frame);
+                    this.isConnected = true;
+                    this.playerId = username;
+                    
+                    // 如果提供了成功回调，则调用它
+                    if (successCallback) {
+                        successCallback(frame);
+                    }
+                },
+                // 连接错误回调
+                (error) => {
+                    console.error('WebSocket连接失败:', error);
+                    
+                    // 如果提供了错误回调，则调用它
+                    if (errorCallback) {
+                        errorCallback(error);
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('建立WebSocket连接时发生错误:', e);
+            if (errorCallback) {
+                errorCallback(e);
+            }
+        }
+    },
+    
+    // 断开WebSocket连接
+    disconnect: function() {
+        if (this.stompClient && this.stompClient.connected) {
+            console.log('正在断开WebSocket连接...');
+            this.stompClient.disconnect(() => {
+                console.log('WebSocket连接已断开');
+                this.isConnected = false;
+            });
+        }
+    },
+    
+    // 发送游戏动作
+    sendGameAction: function(actionType, actionData) {
+        if (this.stompClient && this.stompClient.connected) {
+            const payload = {
+                type: actionType,
+                ...actionData
+            };
+            GameState.stompClient.send("/app/game/action", {}, JSON.stringify({
+                playerId: this.playerId,
+                roomId: this.roomId,
+                action: payload
+            }));
+        } else {
+            console.error('无法发送游戏动作：WebSocket未连接');
+        }
+    }
 };
 
 // WebSocket连接管理

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幻影扑克 - 管理员控制台</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/common.css"/>
+    <link rel="stylesheet" href="css/admin.css"/>
+    <!-- jQuery -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!-- Layer UI -->
+    <script src="plugins/layer/layer.js"></script>
+    <!-- WebSocket -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body class="admin-page">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-gamepad me-2"></i>幻影扑克管理控制台
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="nav nav-pills" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="rooms-tab" data-bs-toggle="tab" data-bs-target="#rooms" type="button" role="tab">
+                            <i class="fas fa-door-open me-1"></i>房间管理
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="players-tab" data-bs-toggle="tab" data-bs-target="#players" type="button" role="tab">
+                            <i class="fas fa-users me-1"></i>玩家管理
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system" type="button" role="tab">
+                            <i class="fas fa-server me-1"></i>系统信息
+                        </button>
+                    </li>
+                </ul>
+                <div class="ms-auto d-flex align-items-center">
+                    <span id="connectionStatus" class="badge bg-danger">
+                        <i class="fas fa-plug me-1"></i>未连接
+                    </span>
+                    <button id="refreshBtn" class="btn btn-light btn-sm ms-2">
+                        <i class="fas fa-sync-alt me-1"></i>刷新
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="tab-content">
+            <!-- 房间管理标签页 -->
+            <div class="tab-pane fade show active" id="rooms" role="tabpanel">
+                <div class="room-list-header d-flex justify-content-between align-items-center">
+                    <h5>
+                        <i class="fas fa-list me-2"></i>房间列表
+                    </h5>
+                    <span id="roomCount" class="badge bg-primary">0个房间</span>
+                </div>
+                <div class="table-container">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>房间ID</th>
+                                    <th>房间名称</th>
+                                    <th>房主</th>
+                                    <th>玩家数/最大人数</th>
+                                    <th>状态</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="roomList">
+                                <!-- 房间列表将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 玩家管理标签页 -->
+            <div class="tab-pane fade" id="players" role="tabpanel">
+                <div class="player-list-header d-flex justify-content-between align-items-center">
+                    <h5>
+                        <i class="fas fa-users me-2"></i>在线玩家列表
+                    </h5>
+                    <span id="playerCount" class="badge bg-primary">0个玩家</span>
+                </div>
+                <div class="table-container">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>玩家ID</th>
+                                    <th>状态</th>
+                                    <th>所在房间</th>
+                                    <th>最后活动时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="playerList">
+                                <!-- 玩家列表将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统信息标签页 -->
+            <div class="tab-pane fade" id="system" role="tabpanel">
+                <div class="system-info-container">
+                    <div class="system-card mb-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-server me-2"></i>系统状态
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="system-info-grid">
+                                    <div class="system-stat">
+                                        <span class="system-stat-label">
+                                            <i class="fas fa-clock"></i>服务器启动时间
+                                        </span>
+                                        <span id="serverStartTime" class="system-stat-value">-</span>
+                                    </div>
+                                    <div class="system-stat">
+                                        <span class="system-stat-label">
+                                            <i class="fas fa-plug"></i>当前连接数
+                                        </span>
+                                        <span id="connectionCount" class="system-stat-value">0</span>
+                                    </div>
+                                    <div class="system-stat">
+                                        <span class="system-stat-label">
+                                            <i class="fas fa-door-open"></i>总房间数
+                                        </span>
+                                        <span id="totalRoomCount" class="system-stat-value">0</span>
+                                    </div>
+                                    <div class="system-stat">
+                                        <span class="system-stat-label">
+                                            <i class="fas fa-users"></i>总玩家数
+                                        </span>
+                                        <span id="totalPlayerCount" class="system-stat-value">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-history me-2"></i>操作日志
+                                </h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="adminLog" class="admin-log">
+                                    <!-- 操作日志将通过JavaScript动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认模态框 -->
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>确认操作
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage" class="mb-0"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-danger" id="confirmActionBtn">
+                        <i class="fas fa-check me-1"></i>确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="js/admin.js"></script>
+</body>
+</html> 

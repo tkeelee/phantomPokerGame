@@ -298,4 +298,90 @@ public class GameWebSocketController {
         notification.setContent(errorMessage);
         return notification;
     }
+    
+    /**
+     * 处理添加机器人的请求
+     * @param request 包含机器人数量和难度的请求
+     */
+    @MessageMapping("/game/robots/add")
+    public void handleAddRobots(RobotRequest request) {
+        try {
+            logger.info("收到添加机器人请求 - 房间: {}, 数量: {}, 难度: {}", 
+                    request.getRoomId(), request.getCount(), request.getDifficulty());
+            
+            gameService.addRobotsToRoom(request.getRoomId(), request.getCount(), request.getDifficulty());
+            
+            // 发送游戏状态更新
+            GameState state = gameService.getGameState(request.getRoomId());
+            messagingTemplate.convertAndSend("/topic/game/state/" + request.getRoomId(), state);
+            
+            // 发送添加机器人通知
+            GameNotification notification = new GameNotification();
+            notification.setType("ROBOTS_ADDED");
+            notification.setContent("房主添加了 " + request.getCount() + " 个机器人（难度：" + 
+                    request.getDifficulty() + "）");
+            messagingTemplate.convertAndSend("/topic/game/notification/" + request.getRoomId(), notification);
+            
+        } catch (Exception e) {
+            logger.error("添加机器人失败: {}", e.getMessage(), e);
+            
+            // 发送错误通知给房主
+            GameNotification errorNotification = createErrorNotification(request.getPlayerId(), 
+                    "添加机器人失败: " + e.getMessage());
+            messagingTemplate.convertAndSendToUser(request.getPlayerId(), 
+                    "/queue/errors", errorNotification);
+        }
+    }
+    
+    /**
+     * 处理移除机器人的请求
+     * @param request 包含房间ID的请求
+     */
+    @MessageMapping("/game/robots/remove")
+    public void handleRemoveRobots(RobotRequest request) {
+        try {
+            logger.info("收到移除机器人请求 - 房间: {}", request.getRoomId());
+            
+            gameService.removeRobotsFromRoom(request.getRoomId());
+            
+            // 发送游戏状态更新
+            GameState state = gameService.getGameState(request.getRoomId());
+            messagingTemplate.convertAndSend("/topic/game/state/" + request.getRoomId(), state);
+            
+            // 发送移除机器人通知
+            GameNotification notification = new GameNotification();
+            notification.setType("ROBOTS_REMOVED");
+            notification.setContent("房主移除了所有机器人");
+            messagingTemplate.convertAndSend("/topic/game/notification/" + request.getRoomId(), notification);
+            
+        } catch (Exception e) {
+            logger.error("移除机器人失败: {}", e.getMessage(), e);
+            
+            // 发送错误通知给房主
+            GameNotification errorNotification = createErrorNotification(request.getPlayerId(), 
+                    "移除机器人失败: " + e.getMessage());
+            messagingTemplate.convertAndSendToUser(request.getPlayerId(), 
+                    "/queue/errors", errorNotification);
+        }
+    }
+    
+    /**
+     * 机器人请求对象
+     */
+    public static class RobotRequest {
+        private String roomId;
+        private String playerId;
+        private int count;
+        private String difficulty;
+        
+        // Getters and Setters
+        public String getRoomId() { return roomId; }
+        public void setRoomId(String roomId) { this.roomId = roomId; }
+        public String getPlayerId() { return playerId; }
+        public void setPlayerId(String playerId) { this.playerId = playerId; }
+        public int getCount() { return count; }
+        public void setCount(int count) { this.count = count; }
+        public String getDifficulty() { return difficulty; }
+        public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+    }
 } 

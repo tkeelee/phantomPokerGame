@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 游戏服务类，负责处理游戏的主要逻辑
@@ -23,6 +25,8 @@ public class GameService {
     
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
     /**
      * 创建游戏房间
@@ -56,16 +60,67 @@ public class GameService {
     }
 
     /**
+     * 使用指定的房间ID创建房间
+     * 这个方法用于从WebSocketController同步房间信息
+     * @param roomId 房间ID
+     * @param hostId 房主ID
+     * @param maxPlayers 最大玩家数
+     * @return 创建的房间
+     */
+    public GameRoom createRoomWithId(String roomId, String hostId, int maxPlayers, String roomName) {
+        System.out.println("[DEBUG] 使用指定ID创建房间: " + roomId);
+        
+        // 检查房间是否已存在
+        if (rooms.containsKey(roomId)) {
+            System.out.println("[DEBUG] 房间已存在，返回现有房间: " + roomId);
+            return rooms.get(roomId);
+        }
+        
+        GameRoom room = new GameRoom();
+        room.setId(roomId);
+        room.setHostId(hostId);
+        room.setMaxPlayers(maxPlayers);
+        room.setStatus(GameStatus.WAITING);
+        room.setPlayers(new ArrayList<>());
+        room.addPlayer(hostId);
+        room.setCurrentPlayerIndex(0);
+        
+        // 初始化房间状态
+        GameState state = new GameState();
+        state.setRoomId(roomId);
+        state.setHostId(hostId);
+        state.setStatus(GameStatus.WAITING);
+        state.setGameStatus("WAITING");
+        state.getPlayers().add(hostId);
+        state.setRoomName(roomName);
+        
+        // 存储房间和状态
+        rooms.put(roomId, room);
+        gameStates.put(roomId, state);
+        
+        System.out.println("[DEBUG] 成功创建指定ID的房间: " + roomId);
+        System.out.println("[DEBUG] 当前所有房间: " + rooms.keySet());
+        
+        return room;
+    }
+
+    /**
      * 加入房间
      * @param roomId 房间ID
      * @param playerId 玩家ID
      * @return 加入的房间
      */
     public GameRoom joinRoom(String roomId, String playerId) {
+        System.out.println("[DEBUG] 尝试加入房间, roomId: " + roomId + ", playerId: " + playerId);
         GameRoom room = rooms.get(roomId);
         if (room == null) {
-            throw new GameException("房间不存在："+roomId, "ROOM_NOT_FOUND");
+            System.out.println("[ERROR] 房间不存在: " + roomId);
+            System.out.println("[DEBUG] 当前存在的房间: " + rooms.keySet());
+            throw new GameException("房间不存在：" + roomId, "ROOM_NOT_FOUND");
         }
+        
+        System.out.println("[DEBUG] 找到房间, 状态: " + room.getStatus() + ", 玩家: " + room.getPlayers() + ", 最大人数: " + room.getMaxPlayers());
+        
         if (room.getStatus() != GameStatus.WAITING) {
             throw new GameException("游戏已开始，无法加入", "GAME_ALREADY_STARTED");
         }
@@ -75,6 +130,7 @@ public class GameService {
         
         // 添加玩家到房间
         if (!room.getPlayers().contains(playerId)) {
+            System.out.println("[DEBUG] 添加玩家到房间: " + playerId);
             room.addPlayer(playerId);
             
             // 更新游戏状态
@@ -85,6 +141,8 @@ public class GameService {
             
             // 发送状态更新
             sendGameStateUpdate(roomId);
+        } else {
+            System.out.println("[DEBUG] 玩家已在房间中: " + playerId);
         }
         return room;
     }
@@ -847,6 +905,43 @@ public class GameService {
     private void broadcastRoomState(GameRoom room) {
         if (messagingTemplate != null) {
             messagingTemplate.convertAndSend("/topic/room/" + room.getId(), room);
+        }
+    }
+
+    /**
+     * 从系统中移除房间
+     * 
+     * @param roomId 要移除的房间ID
+     * @return 是否成功移除
+     */
+    public boolean removeRoom(String roomId) {
+        // 检查房间是否存在
+        if (!rooms.containsKey(roomId)) {
+            log.warn("房间不存在: {}", roomId);
+            return false;
+        }
+        
+        try {
+            // 获取房间对象
+            GameRoom room = rooms.get(roomId);
+            
+            // 确保房间中没有玩家
+            if (room.getPlayers() != null && !room.getPlayers().isEmpty()) {
+                log.warn("房间 {} 中仍有玩家，无法删除", roomId);
+                return false;
+            }
+            
+            // 从房间集合中移除
+            rooms.remove(roomId);
+            
+            // 从游戏状态集合中移除
+            gameStates.remove(roomId);
+            
+            log.info("房间已从系统中移除: {}", roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("移除房间时发生错误: {}", e.getMessage(), e);
+            return false;
         }
     }
 }

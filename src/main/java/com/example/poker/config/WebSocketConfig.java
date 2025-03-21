@@ -24,7 +24,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // 启用简单消息代理
-        config.enableSimpleBroker("/topic", "/queue", "/user");
+        config.enableSimpleBroker("/topic", "/queue");
         // 设置应用程序目标前缀
         config.setApplicationDestinationPrefixes("/app");
         // 设置用户目标前缀
@@ -35,7 +35,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // 注册STOMP端点，添加SockJS回退选项
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:[*]")  // 允许本地任何端口访问
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
@@ -50,7 +50,27 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     String username = accessor.getFirstNativeHeader("login");
                     if (username != null) {
                         System.out.println("[DEBUG] 用户连接 - 用户名: " + username);
+                        System.out.println("[DEBUG] 所有头信息: " + accessor.toString());
                         accessor.setUser(() -> username);
+                    } else {
+                        System.out.println("[WARN] 用户连接但未提供用户名");
+                        System.out.println("[DEBUG] 连接头信息: " + accessor.toString());
+                    }
+                } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    // 记录订阅信息
+                    String destination = accessor.getDestination();
+                    System.out.println("[DEBUG] 用户订阅 - 目标: " + destination);
+                    if (accessor.getUser() != null) {
+                        System.out.println("[DEBUG] 订阅用户: " + accessor.getUser().getName());
+                    } else {
+                        System.out.println("[WARN] 无法识别订阅用户");
+                    }
+                } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+                    // 记录发送消息信息
+                    String destination = accessor.getDestination();
+                    System.out.println("[DEBUG] 用户发送消息 - 目标: " + destination);
+                    if (accessor.getUser() != null) {
+                        System.out.println("[DEBUG] 发送用户: " + accessor.getUser().getName());
                     }
                 }
                 

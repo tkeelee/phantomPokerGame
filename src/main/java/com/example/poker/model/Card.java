@@ -1,13 +1,15 @@
 package com.example.poker.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 /**
  * 扑克牌类
  */
 @Data
-@EqualsAndHashCode
+@NoArgsConstructor
+@AllArgsConstructor
 public class Card {
     /**
      * 花色枚举

@@ -1,39 +1,86 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幻影扑克 - 登录</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/common.css"/>
-    <script src="plugins/jQuery/jquery-1.8.3.min.js"></script>
-    <script src="plugins/placeholder/placeholder.js"></script>
-    <script src="plugins/layer/layer.js"></script>
+    <title>幻影扑克</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        #login-btn {
+            width: 100%;
+        }
+        
+        .game-intro {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+        }
+        
+        .footer { 
+            margin-top: 50px; 
+            text-align: center; 
+            color: #666; 
+            font-size: 0.9rem; 
+        }
+        
+        .admin-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #999;
+            font-size: 0.8rem;
+            text-decoration: none;
+        }
+        
+        .admin-link:hover {
+            color: #666;
+        }
+    </style>
 </head>
 <body class="login-page">
-    <div class="login-container">
-        <div class="login-box">
+    <div class="container">
+        <div class="login-container">
             <h1>幻影扑克</h1>
             <div class="login-form">
-                <div class="mb-3">
-                    <input type="text" id="playerName" class="form-control" placeholder="请输入您的昵称">
+                <div class="form-group">
+                    <label for="nickname">请输入您的昵称:</label>
+                    <input type="text" class="form-control" id="nickname" placeholder="在此输入昵称">
                 </div>
-                <button onclick="login()" class="btn btn-primary w-100">进入游戏</button>
+                <button id="login-btn" class="btn btn-primary">进入游戏</button>
             </div>
             <div class="game-intro">
-                <h3>游戏介绍</h3>
-                <p>幻影扑克是一款刺激有趣的多人扑克牌游戏，玩家可以通过说谎和识破对手的谎言来获胜。每位玩家轮流出牌，可以选择说实话或说谎，其他玩家可以选择质疑。如果质疑成功，出牌者要收走所有牌；如果质疑失败，质疑者要收走所有牌。率先出完手中的牌者获胜！</p>
-                <ul>
-                    <li>支持2-4人实时对战</li>
-                    <li>智能机器人陪玩</li>
-                    <li>实时聊天互动</li>
-                    <li>排行榜系统</li>
-                    <li>精美的界面和音效</li>
-                </ul>
+                <p>欢迎来到幻影扑克 - 一款刺激的多人在线卡牌游戏！</p>
             </div>
+        </div>
+        <div class="footer">
+            <p>© 2023 幻影扑克 - 所有权利保留</p>
+            <a href="/admin.html" class="admin-link">管理员入口</a>
         </div>
     </div>
     <script src="js/login.js"></script>

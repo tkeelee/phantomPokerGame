@@ -3,7 +3,7 @@ package com.example.poker.dto;
 import java.util.List;
 import java.util.Map;
 import com.example.poker.model.Card;
-public class GameStartDto {
+public class GameStartDto{
     private String currentPlayer;
     private List<String> players;
     private Map<String, List<Card>> playerHands;
