@@ -1,43 +1,40 @@
 package com.example.poker.dto;
 
-public class GameStartDTO {
-    private int deckCount;
+import java.util.List;
+import java.util.Map;
+import com.example.poker.model.Card;
+public class GameStartDto {
+    private String currentPlayer;
+    private List<String> players;
+    private Map<String, List<Card>> playerHands;
+    private List<Card> currentPile;
+    private List<Card> selectedCards;
+    private String declaredValue;
     private String hostId;
-    private int playerCount;
-    /**
-     * 游戏状态：WAITING-等待准备，READY-已准备，IN_PROGRESS-进行中
-     */
     private String gameStatus;
 
-    public int getDeckCount() {
-        return deckCount;
-    }
+    // Getters and setters
+    public String getCurrentPlayer() { return currentPlayer; }
+    public void setCurrentPlayer(String currentPlayer) { this.currentPlayer = currentPlayer; }
 
-    public void setDeckCount(int deckCount) {
-        this.deckCount = deckCount;
-    }
+    public List<String> getPlayers() { return players; }
+    public void setPlayers(List<String> players) { this.players = players; }
 
-    public String getHostId() {
-        return hostId;
-    }
+    public Map<String, List<Card>> getPlayerHands() { return playerHands; }
+    public void setPlayerHands(Map<String, List<Card>> playerHands) { this.playerHands = playerHands; }
 
-    public void setHostId(String hostId) {
-        this.hostId = hostId;
-    }
+    public List<Card> getCurrentPile() { return currentPile; }
+    public void setCurrentPile(List<Card> currentPile) { this.currentPile = currentPile; }
 
-    public int getPlayerCount() {
-        return playerCount;
-    }
+    public List<Card> getSelectedCards() { return selectedCards; }
+    public void setSelectedCards(List<Card> selectedCards) { this.selectedCards = selectedCards; }
 
-    public void setPlayerCount(int playerCount) {
-        this.playerCount = playerCount;
-    }
-    
-    public String getGameStatus() {
-        return gameStatus;
-    }
-    
-    public void setGameStatus(String gameStatus) {
-        this.gameStatus = gameStatus;
-    }
+    public String getDeclaredValue() { return declaredValue; }
+    public void setDeclaredValue(String declaredValue) { this.declaredValue = declaredValue; }
+
+    public String getHostId() { return hostId; }
+    public void setHostId(String hostId) { this.hostId = hostId; }
+
+    public String getGameStatus() { return gameStatus; }
+    public void setGameStatus(String gameStatus) { this.gameStatus = gameStatus; }
 }

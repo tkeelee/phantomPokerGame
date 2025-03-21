@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 /**
- * 牌组服务类，负责创建和洗牌
+ * 牌组服务类，负责创建、洗牌和发牌
  */
 @Service
 public class DeckService {
@@ -62,9 +62,8 @@ public class DeckService {
     
     /**
      * 均匀分牌给玩家
-     * 
      * @param deck 牌组
-     * @param playerCount 玩家数量
+     * @param players 玩家ID列表
      * @return 玩家ID到手牌的映射
      */
     public Map<String, List<Card>> dealCards(List<Card> deck, List<String> players) {
@@ -86,5 +85,35 @@ public class DeckService {
         }
         
         return playerHands;
+    }
+
+    /**
+     * 从牌组中发指定数量的牌
+     * @param deck 牌组
+     * @param count 需要发的牌数量
+     * @return 发出的牌
+     */
+    public List<Card> dealCards(List<Card> deck, int count) {
+        List<Card> hand = new ArrayList<>();
+        
+        for (int i = 0; i < count && !deck.isEmpty(); i++) {
+            hand.add(deck.remove(0));
+        }
+        
+        return hand;
+    }
+
+    /**
+     * 创建并洗牌
+     * @param deckCount 牌组数量
+     * @return 已洗牌的牌组
+     */
+    public List<Card> createAndShuffleDeck(int deckCount) {
+        List<Card> deck = new ArrayList<>();
+        for (int i = 0; i < deckCount; i++) {
+            createSingleDeck(deck);
+        }
+        fisherYatesShuffle(deck);
+        return deck;
     }
 }

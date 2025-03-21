@@ -45,19 +45,25 @@ function connect() {
         console.log('Connected: ' + frame);
         
         // 订阅游戏状态更新
-        stompClient.subscribe('/topic/game/state', function(gameState) {
-            updateGameState(JSON.parse(gameState.body));
-        });
+        if (currentRoom && currentRoom.id) {
+            stompClient.subscribe('/topic/game/state/' + currentRoom.id, function(gameState) {
+                updateGameState(JSON.parse(gameState.body));
+            });
+        }
         
         // 订阅聊天消息
-        stompClient.subscribe('/topic/game/chat', function(chatMessage) {
-            addChatMessage(JSON.parse(chatMessage.body));
-        });
+        if (currentRoom && currentRoom.id) {
+            stompClient.subscribe('/topic/game/chat/' + currentRoom.id, function(chatMessage) {
+                addChatMessage(JSON.parse(chatMessage.body));
+            });
+        }
         
         // 订阅游戏结果
-        stompClient.subscribe('/topic/game/result', function(gameResult) {
-            showGameResult(JSON.parse(gameResult.body));
-        });
+        if (currentRoom && currentRoom.id) {
+            stompClient.subscribe('/topic/game/result/' + currentRoom.id, function(gameResult) {
+                showGameResult(JSON.parse(gameResult.body));
+            });
+        }
     }, function(error) {
         console.error('连接错误:', error);
         // 尝试重新连接
@@ -136,6 +142,29 @@ function joinRoom(roomId) {
             currentRoom = room;
             updateRoomInfo(room);
             playSound('cardSound');
+            
+            // 重新订阅WebSocket主题
+            if (stompClient && stompClient.connected) {
+                // 取消之前的订阅
+                if (stompClient.subscriptions) {
+                    Object.values(stompClient.subscriptions).forEach(subscription => {
+                        subscription.unsubscribe();
+                    });
+                }
+                
+                // 重新订阅
+                stompClient.subscribe('/topic/game/state/' + roomId, function(gameState) {
+                    updateGameState(JSON.parse(gameState.body));
+                });
+                
+                stompClient.subscribe('/topic/game/chat/' + roomId, function(chatMessage) {
+                    addChatMessage(JSON.parse(chatMessage.body));
+                });
+                
+                stompClient.subscribe('/topic/game/result/' + roomId, function(gameResult) {
+                    showGameResult(JSON.parse(gameResult.body));
+                });
+            }
         },
         error: function(error) {
             console.error('加入房间失败:', error);
@@ -624,19 +653,33 @@ function restartGame() {
 
 // 播放音效
 function playSound(soundId) {
-    if (soundEnabled) {
-        try {
-            const sound = document.getElementById(soundId);
-            sound.currentTime = 0;
-            sound.play();
-        } catch (e) {
-            console.error('播放音效失败:', e);
-        }
+    if (!soundEnabled) return;
+    
+    const sound = document.getElementById(soundId);
+    if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(error => {
+            console.error('播放音效失败:', error);
+        });
     }
 }
 
 // 切换音效
 function toggleSound() {
     soundEnabled = !soundEnabled;
-    $('#soundToggle').text(soundEnabled ? '🔊' : '🔇');
+    const soundToggle = document.getElementById('soundToggle');
+    soundToggle.textContent = soundEnabled ? '🔊' : '🔈';
+    localStorage.setItem('soundEnabled', soundEnabled);
 }
+
+// 初始化音效设置
+document.addEventListener('DOMContentLoaded', function() {
+    const savedSoundEnabled = localStorage.getItem('soundEnabled');
+    if (savedSoundEnabled !== null) {
+        soundEnabled = savedSoundEnabled === 'true';
+    }
+    const soundToggle = document.getElementById('soundToggle');
+    if (soundToggle) {
+        soundToggle.textContent = soundEnabled ? '🔊' : '🔈';
+    }
+});

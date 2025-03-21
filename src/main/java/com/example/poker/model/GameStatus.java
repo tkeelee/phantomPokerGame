@@ -28,5 +28,10 @@ public enum GameStatus {
     /**
      * 游戏结束状态
      */
-    FINISHED    // 游戏结束
+    FINISHED,   // 游戏结束
+    
+    /**
+     * 游戏进行中状态
+     */
+    IN_PROGRESS  // 游戏进行中
 } 

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Date;
 import lombok.Data;
 
 @Data
@@ -23,6 +24,23 @@ public class GameState {
     private List<String> passedPlayers;  // 已经过牌的玩家
     private String lastPlayerId;  // 上次出牌的玩家
     private List<String> winners;  // 已打完手牌的玩家列表（按顺序）
+    private String winner;
+    
+    // 上一次出牌信息
+    private List<Card> lastPlayedCards;
+    private String lastPlayedValue;
+    private String lastPlayedPlayer;
+    private Date lastPlayedTime;
+    
+    // 上一次挑战信息
+    private Date lastChallengeTime;
+    private String lastChallengePlayer;
+    private String lastChallengeResult;
+    private List<Card> lastChallengeCards;
+    private String lastChallengeValue;
+    private Boolean lastChallengeSuccess;
+    private List<Card> lastChallengePile;
+    private Map<String, List<Card>> lastChallengeHands;
 
     public GameState() {
         this.players = new ArrayList<>();
@@ -226,5 +244,109 @@ public class GameState {
 
     public void setWinners(List<String> winners) {
         this.winners = winners;
+    }
+
+    public String getWinner() {
+        return winner;
+    }
+
+    public void setWinner(String winner) {
+        this.winner = winner;
+    }
+
+    public List<Card> getLastPlayedCards() {
+        return lastPlayedCards;
+    }
+
+    public void setLastPlayedCards(List<Card> lastPlayedCards) {
+        this.lastPlayedCards = lastPlayedCards;
+    }
+
+    public String getLastPlayedValue() {
+        return lastPlayedValue;
+    }
+
+    public void setLastPlayedValue(String lastPlayedValue) {
+        this.lastPlayedValue = lastPlayedValue;
+    }
+
+    public String getLastPlayedPlayer() {
+        return lastPlayedPlayer;
+    }
+
+    public void setLastPlayedPlayer(String lastPlayedPlayer) {
+        this.lastPlayedPlayer = lastPlayedPlayer;
+    }
+
+    public Date getLastPlayedTime() {
+        return lastPlayedTime;
+    }
+
+    public void setLastPlayedTime(Date lastPlayedTime) {
+        this.lastPlayedTime = lastPlayedTime;
+    }
+
+    public Date getLastChallengeTime() {
+        return lastChallengeTime;
+    }
+
+    public void setLastChallengeTime(Date lastChallengeTime) {
+        this.lastChallengeTime = lastChallengeTime;
+    }
+
+    public String getLastChallengePlayer() {
+        return lastChallengePlayer;
+    }
+
+    public void setLastChallengePlayer(String lastChallengePlayer) {
+        this.lastChallengePlayer = lastChallengePlayer;
+    }
+
+    public String getLastChallengeResult() {
+        return lastChallengeResult;
+    }
+
+    public void setLastChallengeResult(String lastChallengeResult) {
+        this.lastChallengeResult = lastChallengeResult;
+    }
+
+    public List<Card> getLastChallengeCards() {
+        return lastChallengeCards;
+    }
+
+    public void setLastChallengeCards(List<Card> lastChallengeCards) {
+        this.lastChallengeCards = lastChallengeCards;
+    }
+
+    public String getLastChallengeValue() {
+        return lastChallengeValue;
+    }
+
+    public void setLastChallengeValue(String lastChallengeValue) {
+        this.lastChallengeValue = lastChallengeValue;
+    }
+
+    public Boolean getLastChallengeSuccess() {
+        return lastChallengeSuccess;
+    }
+
+    public void setLastChallengeSuccess(Boolean lastChallengeSuccess) {
+        this.lastChallengeSuccess = lastChallengeSuccess;
+    }
+
+    public List<Card> getLastChallengePile() {
+        return lastChallengePile;
+    }
+
+    public void setLastChallengePile(List<Card> lastChallengePile) {
+        this.lastChallengePile = lastChallengePile;
+    }
+
+    public Map<String, List<Card>> getLastChallengeHands() {
+        return lastChallengeHands;
+    }
+
+    public void setLastChallengeHands(Map<String, List<Card>> lastChallengeHands) {
+        this.lastChallengeHands = lastChallengeHands;
     }
 }
