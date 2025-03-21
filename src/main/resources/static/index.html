@@ -149,12 +149,13 @@
     <audio id="challengeSound" src="poke/sounds/challenge.mp3" preload="auto"></audio>
 
     <script>
-        let stompClient = null;
-        let currentPlayer = null;
-        let currentRoom = null;
-        let selectedCards = [];
-        let isReady = false;
-        let soundEnabled = true;
+        // 全局变量在common.js中已定义，这里不再重复声明
+        // let stompClient = null;
+        // let currentPlayer = null;
+        // let currentRoom = null;
+        // let selectedCards = [];
+        // let isReady = false;
+        // let soundEnabled = true;
 
         // 页面加载完成后显示登录表单
         document.addEventListener('DOMContentLoaded', function() {
@@ -168,32 +169,33 @@
             });
         });
 
-        function connect() {
-            const socket = new SockJS('/ws');
-            stompClient = Stomp.over(socket);
-            stompClient.connect({}, function(frame) {
-                console.log('Connected: ' + frame);
-                
-                // 订阅游戏状态更新
-                stompClient.subscribe('/topic/game/state', function(gameState) {
-                    updateGameState(JSON.parse(gameState.body));
-                });
-                
-                // 订阅聊天消息
-                stompClient.subscribe('/topic/game/chat', function(chatMessage) {
-                    addChatMessage(JSON.parse(chatMessage.body));
-                });
-                
-                // 订阅游戏结果
-                stompClient.subscribe('/topic/game/result', function(gameResult) {
-                    showGameResult(JSON.parse(gameResult.body));
-                });
-            }, function(error) {
-                console.error('连接错误:', error);
-                // 尝试重新连接
-                setTimeout(connect, 5000);
-            });
-        }
+        // connect函数已在common.js中定义，这里不再重复定义
+        // function connect() {
+        //     const socket = new SockJS('/ws');
+        //     stompClient = Stomp.over(socket);
+        //     stompClient.connect({}, function(frame) {
+        //         console.log('Connected: ' + frame);
+        //         
+        //         // 订阅游戏状态更新
+        //         stompClient.subscribe('/topic/game/state', function(gameState) {
+        //             updateGameState(JSON.parse(gameState.body));
+        //         });
+        //         
+        //         // 订阅聊天消息
+        //         stompClient.subscribe('/topic/game/chat', function(chatMessage) {
+        //             addChatMessage(JSON.parse(chatMessage.body));
+        //         });
+        //         
+        //         // 订阅游戏结果
+        //         stompClient.subscribe('/topic/game/result', function(gameResult) {
+        //             showGameResult(JSON.parse(gameResult.body));
+        //         });
+        //     }, function(error) {
+        //         console.error('连接错误:', error);
+        //         // 尝试重新连接
+        //         setTimeout(connect, 5000);
+        //     });
+        // }
 
         function login() {
             const playerName = document.getElementById('playerName').value.trim();
@@ -807,4 +809,4 @@
         }
     </script>
 </body>
-</html> 
+</html>

@@ -147,4 +147,13 @@ public class GameController {
     public ResponseEntity<List<PlayerState>> getPlayers(@PathVariable String roomId) {
         return ResponseEntity.ok(gameService.getPlayers(roomId));
     }
+    
+    /**
+     * 获取所有游戏房间列表
+     * @return 房间列表
+     */
+    @GetMapping("/rooms")
+    public ResponseEntity<List<GameRoom>> getAllRooms() {
+        return ResponseEntity.ok(gameService.getAllRooms());
+    }
 }

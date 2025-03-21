@@ -39,7 +39,7 @@ function collaseWin(el) {
 
 // 连接WebSocket
 function connect() {
-    const socket = new SockJS('/ws');
+    const socket = new SockJS('/poker-websocket');
     stompClient = Stomp.over(socket);
     stompClient.connect({}, function(frame) {
         console.log('Connected: ' + frame);

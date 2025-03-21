@@ -459,6 +459,14 @@ public class GameService {
         }
         return room;
     }
+    
+    /**
+     * 获取所有游戏房间列表
+     * @return 房间列表
+     */
+    public List<GameRoom> getAllRooms() {
+        return new ArrayList<>(rooms.values());
+    }
 
     /**
      * 获取游戏状态
