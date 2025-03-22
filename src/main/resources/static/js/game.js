@@ -65,7 +65,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!playerData || !playerData.id) {
             console.error('[DEBUG] 未找到有效的玩家信息');
             layer.msg('登录状态异常，请重新登录', {
-                icon: 2,
                 time: 1500,
                 end: function() {
                     window.location.href = 'index.html';
@@ -88,7 +87,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!currentRoomId) {
             console.error('[DEBUG] 房间ID无效');
             layer.msg('房间ID无效，返回大厅', {
-                icon: 2,
                 time: 1500,
                 end: function() {
                     window.location.href = 'lobby.html';
@@ -117,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
         console.error('[DEBUG] 游戏页面初始化失败:', error);
         layer.msg('初始化失败，请重新登录', {
-            icon: 2,
             time: 1500,
             end: function() {
                 window.location.href = 'index.html';
@@ -676,9 +673,7 @@ function showGameNotification(notification) {
 function showError(message) {
     // 使用 layer 插件显示错误消息
     layer.msg(message, {
-        icon: 2,  // 错误图标
         time: 2000,  // 显示2秒
-        anim: 6,  // 抖动动画
         shade: [0.3, '#000'],  // 遮罩
         offset: '30%'  // 位置靠上显示
     });
@@ -687,7 +682,6 @@ function showError(message) {
 function showSuccess(message) {
     // 使用 layer 插件显示成功消息
     layer.msg(message, {
-        icon: 1,  // 成功图标
         time: 1500,  // 显示1.5秒
         shade: [0.3, '#000'],  // 遮罩
         offset: '30%'  // 位置靠上显示
@@ -697,7 +691,6 @@ function showSuccess(message) {
 function showInfo(message) {
     // 使用 layer 插件显示信息提示
     layer.msg(message, {
-        icon: 0,  // 信息图标
         time: 2000,  // 显示2秒
         offset: '30%'  // 位置靠上显示
     });
@@ -706,9 +699,7 @@ function showInfo(message) {
 function showWarning(message) {
     // 使用 layer 插件显示警告消息
     layer.msg(message, {
-        icon: 3,  // 警告图标
         time: 2000,  // 显示2秒
-        anim: 6,  // 抖动动画
         offset: '30%'  // 位置靠上显示
     });
 }
@@ -1465,7 +1456,7 @@ function handleForceLogout(notification) {
     
     // 使用layer显示消息
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {icon: 2, time: 3000});
+        layer.msg(message, {time: 3000});
     } else {
         alert(message);
     }
@@ -1666,7 +1657,6 @@ function checkBanStatus() {
                 const message = `您的账号已被暂时禁用，${remainingMinutes}分钟后可再次登录`;
                 
                 layer.msg(message, {
-                    icon: 2,
                     time: 3000,
                     end: function() {
                         window.location.href = 'index.html';

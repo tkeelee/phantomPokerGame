@@ -237,7 +237,7 @@ public class PlayerService {
             
             // 如果需要，添加到黑名单
             if (reason != null && reason.equals("BAN")) {
-                banPlayer(playerId, 3600); // 默认禁用1小时
+                banPlayer(playerId, 10); // 默认禁用10秒
             }
             
             // 通知客户端被踢出

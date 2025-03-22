@@ -22,7 +22,7 @@ $(function() {
     window.showError = function(message) {
         // 如果layer已加载，使用layer提示
         if (typeof layer !== 'undefined') {
-            layer.msg(message, {icon: 2, time: 2000});
+            layer.msg(message);
         } else {
             // 否则使用alert
             alert(message);
@@ -52,7 +52,7 @@ $(function() {
                     const message = `您的账号已被暂时禁用，${remainingMinutes}分钟后可再次登录`;
                     
                     if (typeof layer !== 'undefined') {
-                        layer.msg(message, {icon: 2, time: 3000});
+                        layer.msg(message);
                     } else {
                         alert(message);
                     }
@@ -97,7 +97,7 @@ $(function() {
             
             // 如果原因是封禁，显示不同的消息
             const isBanned = kickReason === 'BAN' || kickReason === 'ADMIN_BAN';
-            const waitTimeMax = isBanned ? 300 : 30; // 封禁5分钟，普通踢出30秒
+            const waitTimeMax = isBanned ? 30 : 10; // 封禁30秒，普通踢出10秒
             
             // 如果被踢出后不到等待时间，禁止重新登录
             if (elapsedSeconds < waitTimeMax) {

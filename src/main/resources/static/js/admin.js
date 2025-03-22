@@ -345,9 +345,15 @@ function renderRoomDetail(roomId) {
 
 // 确认解散房间
 function confirmDissolveRoom(roomId) {
-    showConfirmModal('确定要解散房间吗？玩家将回到大厅。', () => {
+    // showConfirmModal('确定要解散房间吗？玩家将回到大厅。', () => {
+    //     dissolveRoom(roomId);
+    // });
+    layer.confirm(`确定要解散房间吗？玩家将回到大厅。`, {
+        btn: ['确定','取消'] //按钮
+      }, function(){
         dissolveRoom(roomId);
-    });
+        layer.closeAll('dialog');
+      });
 }
 
 // 解散房间
@@ -376,9 +382,15 @@ function dissolveRoom(roomId) {
 
 // 确认踢出玩家
 function confirmKickPlayer(playerId) {
-    showConfirmModal(`确定要将玩家 ${playerId} 踢出游戏吗？`, () => {
+    // showConfirmModal(`确定要将玩家 ${playerId} 踢出游戏吗？`, () => {
+    //     kickPlayer(playerId);
+    // });
+    layer.confirm(`确定要将玩家 ${playerId} 踢出游戏吗？`, {
+        btn: ['确定','取消'] //按钮
+      }, function(){
         kickPlayer(playerId);
-    });
+        layer.closeAll('dialog');
+      });
 }
 
 // 通过API踢出玩家（比WebSocket更可靠）
@@ -431,9 +443,15 @@ function kickPlayer(playerId) {
 
 // 确认将玩家踢出房间
 function confirmKickFromRoom(playerId, roomId) {
-    showConfirmModal(`确定要将玩家 ${playerId} 踢出房间吗？`, () => {
+    // showConfirmModal(`确定要将玩家 ${playerId} 踢出房间吗？`, () => {
+    //     kickFromRoom(playerId, roomId);
+    // });
+    layer.confirm(`确定要将玩家 ${playerId} 踢出房间吗？`, {
+        btn: ['确定','取消'] //按钮
+      }, function(){
         kickFromRoom(playerId, roomId);
-    });
+        layer.closeAll('dialog');
+      });
 }
 
 // 将玩家踢出房间
@@ -452,14 +470,14 @@ function kickFromRoom(playerId, roomId) {
 }
 
 // 显示确认模态框
-function showConfirmModal(message, callback) {
-    document.getElementById('confirmMessage').textContent = message;
+// function showConfirmModal(message, callback) {
+//     document.getElementById('confirmMessage').textContent = message;
     
-    pendingAction = callback;
+//     pendingAction = callback;
     
-    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
-    modal.show();
-}
+//     const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+//     modal.show();
+// }
 
 // 设置事件监听
 function setupEventListeners() {

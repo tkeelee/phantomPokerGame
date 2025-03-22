@@ -682,11 +682,7 @@ function hideLoading() {
 
 function showError(message) {
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {
-            icon: 2,
-            time: 3000,
-            skin: 'game-error-msg'
-        });
+        layer.msg(message);
     } else {
         alert(message);
     }
@@ -695,11 +691,7 @@ function showError(message) {
 
 function showSuccess(message) {
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {
-            icon: 1,
-            time: 2000,
-            skin: 'game-success-msg'
-        });
+        layer.msg(message);
     } else {
         alert(message);
     }
@@ -708,22 +700,14 @@ function showSuccess(message) {
 
 function showInfo(message) {
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {
-            icon: 0,
-            time: 2000,
-            skin: 'game-info-msg'
-        });
+        layer.msg(message);
     }
     console.log(message);
 }
 
 function showWarning(message) {
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {
-            icon: 0,
-            time: 3000,
-            skin: 'game-warning-msg'
-        });
+        layer.msg(message);
     } else {
         alert(message);
     }
@@ -1075,7 +1059,7 @@ function handleForceLogout(notification) {
     
     // 使用layer显示消息
     if (typeof layer !== 'undefined') {
-        layer.msg(message, {icon: 2, time: 3000});
+        layer.msg(message, {time: 3000});
     } else {
         alert(message);
     }
