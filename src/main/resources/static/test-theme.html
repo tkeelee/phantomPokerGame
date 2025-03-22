@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幻影扑克 - 主题测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css"/>
+    <link rel="stylesheet" href="css/game-theme.css"/>
+    <script src="plugins/jQuery/jquery-1.8.3.min.js"></script>
+    <script src="plugins/layer/layer.js"></script>
+</head>
+<body class="game-page">
+    <div class="game-container">
+        <div class="game-header">
+            <h1>幻影扑克主题测试</h1>
+            <div>
+                <button class="btn btn-danger">返回</button>
+            </div>
+        </div>
+
+        <div class="game-main row">
+            <div class="col-md-4">
+                <div class="game-container">
+                    <h3>卡牌样式测试</h3>
+                    <div class="player-hand mt-3">
+                        <div class="card spade" data-value="1">
+                            <div class="rank black">A</div>
+                            <div class="suit">♠</div>
+                            <div class="center-icon">♠</div>
+                        </div>
+                        <div class="card heart" data-value="13">
+                            <div class="rank red">K</div>
+                            <div class="suit">♥</div>
+                            <div class="center-icon">♥</div>
+                        </div>
+                        <div class="card diamond selected" data-value="12">
+                            <div class="rank red">Q</div>
+                            <div class="suit">♦</div>
+                            <div class="center-icon">♦</div>
+                        </div>
+                        <div class="card club" data-value="11">
+                            <div class="rank black">J</div>
+                            <div class="suit">♣</div>
+                            <div class="center-icon">♣</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="game-container">
+                    <h3>通知消息测试</h3>
+                    <div class="mt-3">
+                        <button class="game-btn" id="showSuccessBtn">成功消息</button>
+                        <button class="game-btn danger" id="showErrorBtn">错误消息</button>
+                        <button class="game-btn warning" id="showWarningBtn">警告消息</button>
+                        <button class="game-btn success" id="showInfoBtn">信息消息</button>
+                        <button class="game-btn" id="showLoadingBtn">加载消息</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="game-container">
+                    <h3>按钮样式测试</h3>
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <button class="game-btn">标准按钮</button>
+                        <button class="game-btn success">成功按钮</button>
+                        <button class="game-btn danger">危险按钮</button>
+                        <button class="game-btn warning">警告按钮</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-container mt-4">
+            <h3>房间列表测试</h3>
+            <div class="room-list">
+                <div class="room-item">
+                    <div class="room-name">欢乐斗地主</div>
+                    <div class="room-info">创建者: 玩家1 | 状态: 等待中</div>
+                    <div class="room-players">
+                        <div class="player-avatar">P1</div>
+                        <div class="player-avatar">P2</div>
+                    </div>
+                </div>
+
+                <div class="room-item">
+                    <div class="room-name">高手对决</div>
+                    <div class="room-info">创建者: 玩家2 | 状态: 游戏中</div>
+                    <div class="room-players">
+                        <div class="player-avatar">A</div>
+                        <div class="player-avatar">B</div>
+                        <div class="player-avatar">C</div>
+                    </div>
+                </div>
+
+                <div class="room-item">
+                    <div class="room-name">休闲娱乐</div>
+                    <div class="room-info">创建者: 玩家3 | 状态: 等待中</div>
+                    <div class="room-players">
+                        <div class="player-avatar">X</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-container mt-4">
+            <h3>游戏信息区域测试</h3>
+            <div class="game-info">
+                <div class="player">
+                    <span class="player-name">玩家1</span>
+                    <span class="player-status">剩余牌数: 8</span>
+                    <span class="player-turn">当前回合</span>
+                </div>
+                <div class="player">
+                    <span class="player-name">玩家2</span>
+                    <span class="player-status">剩余牌数: 5</span>
+                </div>
+                <div class="player">
+                    <span class="player-name">玩家3</span>
+                    <span class="player-status">剩余牌数: 12</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-container mt-4">
+            <h3>聊天区域测试</h3>
+            <div class="chat-container">
+                <div class="chat-messages">
+                    <div class="chat-message">
+                        <span class="player">玩家1:</span>
+                        <span class="content">大家好，开始游戏吧！</span>
+                        <span class="time">13:45</span>
+                    </div>
+                    <div class="chat-message self">
+                        <span class="player">你:</span>
+                        <span class="content">好的，我已准备好</span>
+                        <span class="time">13:46</span>
+                    </div>
+                    <div class="chat-message">
+                        <span class="player">玩家2:</span>
+                        <span class="content">我再等一下</span>
+                        <span class="time">13:47</span>
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" placeholder="输入消息...">
+                    <button class="game-btn">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // 卡牌交互效果
+            $('.card').click(function() {
+                $(this).toggleClass('selected');
+            });
+
+            // 通知消息测试
+            $('#showSuccessBtn').click(function() {
+                layer.msg('操作成功！', {
+                    icon: 1,
+                    skin: 'game-success-msg',
+                    time: 2000
+                });
+            });
+
+            $('#showErrorBtn').click(function() {
+                layer.msg('操作失败！', {
+                    icon: 2,
+                    skin: 'game-error-msg',
+                    time: 2000
+                });
+            });
+
+            $('#showWarningBtn').click(function() {
+                layer.msg('警告：操作可能有风险！', {
+                    icon: 0,
+                    skin: 'game-warning-msg',
+                    time: 2000
+                });
+            });
+
+            $('#showInfoBtn').click(function() {
+                layer.msg('提示：游戏即将开始', {
+                    icon: 6,
+                    skin: 'game-info-msg',
+                    time: 2000
+                });
+            });
+
+            $('#showLoadingBtn').click(function() {
+                var loadingIndex = layer.load(2, {
+                    shade: [0.3, '#0d1423'],
+                    skin: 'game-loading-msg'
+                });
+                
+                setTimeout(function() {
+                    layer.close(loadingIndex);
+                }, 2000);
+            });
+        });
+    </script>
+</body>
+</html> 

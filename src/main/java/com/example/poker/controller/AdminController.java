@@ -10,10 +10,14 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @Controller
 @Slf4j
@@ -22,6 +26,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final WebSocketController webSocketController;
 
     /**
      * 获取所有房间信息
@@ -108,6 +113,10 @@ public class AdminController {
         
         try {
             adminService.kickPlayer(playerId);
+            
+            // 向普通玩家广播更新玩家列表，确保大厅能看到玩家被移除
+            messagingTemplate.convertAndSend("/topic/players", webSocketController.getOnlinePlayersForBroadcast());
+            
             return adminService.getAllPlayers();
         } catch (Exception e) {
             log.error("踢出玩家失败: " + e.getMessage(), e);
@@ -134,7 +143,8 @@ public class AdminController {
             adminService.kickPlayerFromRoom(playerId, roomId);
             
             // 更新相关数据并广播
-            messagingTemplate.convertAndSend("/topic/players", adminService.getAllPlayers());
+            // 使用WebSocketController的方法获取最新的玩家列表，确保大厅能看到状态变化
+            messagingTemplate.convertAndSend("/topic/players", webSocketController.getOnlinePlayersForBroadcast());
             
             return adminService.getAllRooms();
         } catch (Exception e) {
@@ -144,17 +154,12 @@ public class AdminController {
     }
 
     /**
-     * 处理管理员请求数据
+     * 请求管理员数据
      */
-    @MessageMapping("/admin/request-data")
+    @MessageMapping("/admin/data")
     public void requestAdminData(Map<String, String> payload, Principal principal) {
-        String requestType = payload.get("requestType");
-        
-        if (principal != null) {
-            log.info("用户 {} 请求管理数据: {}", principal.getName(), requestType);
-        } else {
-            log.info("系统请求管理数据: {}", requestType);
-        }
+        String userId = principal != null ? principal.getName() : "系统";
+        log.info("用户 {} 请求管理员数据刷新", userId);
         
         try {
             // 获取最新数据
@@ -162,44 +167,94 @@ public class AdminController {
             List<Player> players = adminService.getAllPlayers();
             AdminSystemInfo systemInfo = adminService.getSystemInfo();
             
-            // 将房间数据发送给所有订阅者
+            // 发送到相应主题
+            messagingTemplate.convertAndSendToUser(
+                userId, 
+                "/queue/admin/data",
+                Map.of(
+                    "success", true,
+                    "message", "数据已刷新"
+                )
+            );
+            
+            // 广播更新
             messagingTemplate.convertAndSend("/topic/admin/rooms", rooms);
-            
-            // 将玩家数据发送给所有订阅者
             messagingTemplate.convertAndSend("/topic/admin/players", players);
-            
-            // 将系统信息发送给所有订阅者
             messagingTemplate.convertAndSend("/topic/admin/system", systemInfo);
             
-            if (principal != null) {
-                log.info("成功向用户 {} 发送管理数据", principal.getName());
-                
-                // 如果发生错误，只向请求用户发送错误消息
-                messagingTemplate.convertAndSendToUser(
-                    principal.getName(),
-                    "/queue/notifications",
-                    Map.of(
-                        "type", "ADMIN_DATA_UPDATED",
-                        "message", "管理数据已更新"
-                    )
-                );
-            } else {
-                log.info("成功广播管理数据");
-            }
+            log.info("已向用户 {} 发送管理员数据更新", userId);
         } catch (Exception e) {
-            log.error("获取管理数据失败: " + e.getMessage(), e);
+            log.error("获取管理员数据失败: " + e.getMessage(), e);
             
-            // 如果有特定用户，向其发送错误消息
+            // 发送错误消息
             if (principal != null) {
                 messagingTemplate.convertAndSendToUser(
                     principal.getName(),
                     "/queue/errors",
                     Map.of(
                         "success", false,
-                        "message", "获取管理数据失败: " + e.getMessage()
+                        "message", "获取数据失败: " + e.getMessage()
                     )
                 );
             }
         }
+    }
+
+    /**
+     * 踢出玩家
+     * @param playerId 玩家ID
+     * @param reason 原因
+     * @return 操作结果
+     */
+    @PostMapping("/admin/players/{playerId}/kick")
+    public ResponseEntity<?> kickPlayer(
+            @PathVariable String playerId,
+            @RequestParam(required = false) String reason) {
+        
+        // 检查管理员权限
+        if (!checkAdminAccess()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "需要管理员权限"));
+        }
+        
+        try {
+            log.info("管理员请求踢出玩家: {}, 原因: {}", playerId, reason);
+            
+            // 直接调用AdminService的kickPlayer方法执行踢出操作
+            adminService.kickPlayer(playerId);
+            
+            // 发送额外的强制登出通知，包含详细原因
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("type", "FORCE_LOGOUT");
+            notification.put("playerId", playerId);
+            notification.put("message", "您已被管理员踢出游戏");
+            notification.put("reason", reason != null ? reason : "违反游戏规则");
+            notification.put("timestamp", System.currentTimeMillis());
+            
+            // 通过WebSocket发送通知
+            messagingTemplate.convertAndSendToUser(
+                    playerId, 
+                    "/queue/notifications", 
+                    notification);
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true, 
+                    "message", "已成功踢出玩家: " + playerId));
+            
+        } catch (Exception e) {
+            log.error("踢出玩家时出错: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "踢出玩家失败: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 检查管理员权限
+     * @return 是否有管理员权限
+     */
+    private boolean checkAdminAccess() {
+        // 根据实际认证机制实现
+        // 这里简化为始终返回true
+        return true;
     }
 } 

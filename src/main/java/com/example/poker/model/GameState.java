@@ -26,6 +26,8 @@ public class GameState {
     private List<String> winners;  // 已打完手牌的玩家列表（按顺序）
     private String winner;
     private String roomName;  // 房间名称
+    private int maxPlayers;  // 最大玩家数
+    private int robotCount;  // 机器人数量
     
     // 上一次出牌信息
     private List<Card> lastPlayedCards;
@@ -357,5 +359,13 @@ public class GameState {
 
     public void setRoomName(String roomName) {
         this.roomName = roomName;
+    }
+
+    public int getRobotCount() {
+        return robotCount;
+    }
+
+    public void setRobotCount(int robotCount) {
+        this.robotCount = robotCount;
     }
 }

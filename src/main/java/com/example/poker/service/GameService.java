@@ -51,6 +51,8 @@ public class GameService {
         state.setStatus(GameStatus.WAITING);
         state.setGameStatus("WAITING");
         state.getPlayers().add(hostId);
+        state.setMaxPlayers(maxPlayers);
+        state.setRobotCount(0); // 初始化机器人数量为0
         
         // 存储房间和状态
         rooms.put(room.getId(), room);
@@ -93,6 +95,7 @@ public class GameService {
         state.setGameStatus("WAITING");
         state.getPlayers().add(hostId);
         state.setRoomName(roomName);
+        state.setMaxPlayers(maxPlayers);
         
         // 存储房间和状态
         rooms.put(roomId, room);
@@ -148,49 +151,96 @@ public class GameService {
     }
 
     /**
-     * 离开房间
+     * 玩家离开房间
      * @param roomId 房间ID
      * @param playerId 玩家ID
      */
     public void leaveRoom(String roomId, String playerId) {
-        GameRoom room = rooms.get(roomId);
+        if (roomId == null || playerId == null) {
+            throw new IllegalArgumentException("房间ID和玩家ID不能为空");
+        }
+        
+        GameRoom room = getRoom(roomId);
         if (room == null) {
-            throw new RuntimeException("房间不存在");
+            // 房间不存在，可能已经被解散
+            log.info("玩家 {} 尝试离开不存在的房间 {}", playerId, roomId);
+            return;
         }
         
-        // 处理玩家退出
-        room.handlePlayerExit(playerId);
+        // 从房间移除玩家
+        room.removePlayer(playerId);
+        log.info("玩家 {} 离开房间 {}", playerId, roomId);
         
-        // 如果游戏已开始，将玩家手牌放入底盘
-        GameState state = gameStates.get(roomId);
-        if (state != null) {
-            List<Card> playerCards = state.getPlayerHands().remove(playerId);
-            if (playerCards != null && !playerCards.isEmpty()) {
-                state.getCurrentPile().addAll(playerCards);
-            }
-            state.getPlayers().remove(playerId);
-            
-            // 如果是房主退出，转移房主
-            if (playerId.equals(state.getHostId()) && !state.getPlayers().isEmpty()) {
-                state.setHostId(state.getPlayers().get(0));
-                room.setHostId(state.getPlayers().get(0));
-            }
-            
-            // 如果是当前玩家退出，轮到下一个玩家
-            if (playerId.equals(state.getCurrentPlayer()) && !state.getPlayers().isEmpty()) {
-                int nextIndex = (state.getPlayers().indexOf(state.getCurrentPlayer()) + 1) % state.getPlayers().size();
-                state.setCurrentPlayer(state.getPlayers().get(nextIndex));
-            }
-            
-            // 发送状态更新
-            sendGameStateUpdate(roomId);
+        // 获取房间状态并更新
+        GameState state = getGameState(roomId);
+        List<String> players = state.getPlayers();
+        players.remove(playerId);
+        state.setPlayers(players);
+        
+        // 如果玩家是房主，更换房主
+        if (playerId.equals(room.getHostId()) && !room.getPlayers().isEmpty()) {
+            // 找出第一个不是机器人的玩家作为新房主
+            String newHostId = findNewHost(room);
+            room.setHostId(newHostId);
+            state.setHostId(newHostId);
+            log.info("房间 {} 更换房主为 {}", roomId, newHostId);
         }
         
-        // 如果房间没有玩家了，删除房间
-        if (room.getPlayers().isEmpty()) {
-            rooms.remove(roomId);
-            gameStates.remove(roomId);
+        // 如果房间中没有真实玩家了（只剩机器人或完全没有玩家），解散房间
+        if (shouldDismissRoom(room)) {
+            log.info("房间 {} 中没有真实玩家，自动解散", roomId);
+            removeRoom(roomId);
+            return;
         }
+        
+        // 广播房间状态更新
+        broadcastRoomState(room);
+        messagingTemplate.convertAndSend("/topic/game-state/" + roomId, state);
+    }
+
+    /**
+     * 判断房间是否应该被解散
+     * @param room 游戏房间
+     * @return 是否应解散
+     */
+    private boolean shouldDismissRoom(GameRoom room) {
+        // 如果没有玩家，直接解散
+        if (room.getPlayers() == null || room.getPlayers().isEmpty()) {
+            return true;
+        }
+        
+        // 检查是否只剩下机器人
+        for (String playerId : room.getPlayers()) {
+            if (!room.isRobot(playerId)) {
+                // 还有真实玩家，不解散
+                return false;
+            }
+        }
+        
+        // 只剩下机器人，应该解散
+        return true;
+    }
+
+    /**
+     * 查找新房主
+     * @param room 游戏房间
+     * @return 新房主ID
+     */
+    private String findNewHost(GameRoom room) {
+        // 优先选择真实玩家作为房主
+        for (String playerId : room.getPlayers()) {
+            if (!room.isRobot(playerId)) {
+                return playerId;
+            }
+        }
+        
+        // 如果没有真实玩家，就用第一个玩家（可能是机器人）
+        if (!room.getPlayers().isEmpty()) {
+            return room.getPlayers().get(0);
+        }
+        
+        // 没有任何玩家，返回null（房间将被解散）
+        return null;
     }
 
     /**
@@ -682,19 +732,33 @@ public class GameService {
     }
 
     /**
+     * 获取当前玩家ID
+     * @return 当前玩家ID
+     */
+    private String getCurrentPlayerId() {
+        // 从当前房间状态中获取当前玩家ID
+        GameState state = gameStates.get(currentRoomId);
+        if (state != null) {
+            return state.getCurrentPlayer();
+        }
+        return null;
+    }
+
+    /**
      * 添加机器人到房间
      * @param roomId 房间ID
      * @param count 机器人数量
      * @param difficulty 机器人难度
+     * @param playerId 当前操作的玩家ID
      */
-    public void addRobotsToRoom(String roomId, int count, String difficulty) {
+    public void addRobotsToRoom(String roomId, int count, String difficulty, String playerId) {
         GameRoom room = rooms.get(roomId);
         if (room == null) {
             throw new IllegalArgumentException("房间不存在");
         }
 
         // 检查是否是房主
-        if (!room.getHostId().equals(getCurrentPlayerId())) {
+        if (!room.getHostId().equals(playerId)) {
             throw new IllegalStateException("只有房主可以添加机器人");
         }
 
@@ -734,15 +798,16 @@ public class GameService {
     /**
      * 移除房间中的所有机器人
      * @param roomId 房间ID
+     * @param playerId 当前操作的玩家ID
      */
-    public void removeRobotsFromRoom(String roomId) {
+    public void removeRobotsFromRoom(String roomId, String playerId) {
         GameRoom room = rooms.get(roomId);
         if (room == null) {
             throw new IllegalArgumentException("房间不存在");
         }
 
         // 检查是否是房主
-        if (!room.getHostId().equals(getCurrentPlayerId())) {
+        if (!room.getHostId().equals(playerId)) {
             throw new IllegalStateException("只有房主可以移除机器人");
         }
 
@@ -886,19 +951,6 @@ public class GameService {
     }
 
     /**
-     * 获取当前玩家ID
-     * @return 当前玩家ID
-     */
-    private String getCurrentPlayerId() {
-        // 从当前房间状态中获取当前玩家ID
-        GameState state = gameStates.get(currentRoomId);
-        if (state != null) {
-            return state.getCurrentPlayer();
-        }
-        return null;
-    }
-
-    /**
      * 广播房间状态更新
      * @param room 游戏房间
      */
@@ -943,5 +995,24 @@ public class GameService {
             log.error("移除房间时发生错误: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * 更新游戏状态中的机器人信息
+     * @param roomId 房间ID
+     */
+    public void updateRobotInfo(String roomId) {
+        GameRoom room = rooms.get(roomId);
+        if (room == null) {
+            throw new RuntimeException("房间不存在");
+        }
+        
+        GameState state = gameStates.get(roomId);
+        if (state == null) {
+            throw new RuntimeException("游戏状态不存在");
+        }
+        
+        // 更新机器人计数
+        state.setRobotCount(room.getRobotCount());
     }
 }

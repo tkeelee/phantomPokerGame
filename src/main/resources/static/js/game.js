@@ -12,6 +12,17 @@ let gameState = {
     soundEnabled: true
 };
 
+// 声音效果管理
+const sounds = {
+    cardSound: new Audio('/sounds/card.mp3'),
+    dealSound: new Audio('/sounds/deal.mp3'),
+    clickSound: new Audio('/sounds/click.mp3'),
+    challengeSound: new Audio('/sounds/challenge.mp3'),
+    victorySound: new Audio('/sounds/victory.mp3'),
+    defeatSound: new Audio('/sounds/defeat.mp3'),
+    notificationSound: new Audio('/sounds/notification.mp3')
+};
+
 // 添加加载提示相关函数
 function showLoading(message) {
     const loadingElement = document.createElement('div');
@@ -38,6 +49,9 @@ function hideLoading() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[DEBUG] 游戏页面初始化开始');
     console.log('[DEBUG] 当前URL:', window.location.href);
+    
+    // 初始化聊天输入框事件
+    initializeChatInput();
     
     // 检查是否被禁用
     if (checkBanStatus()) {
@@ -123,23 +137,9 @@ function connectWebSocket() {
             console.log('[STOMP DEBUG]', str);
         };
         
-        // 确保使用正确的玩家ID
-        const playerId = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
-        
-        // 添加认证信息
-        const connectHeaders = {
-            login: playerId
-        };
-        
-        console.log('[DEBUG] 配置STOMP连接');
-        console.log('[DEBUG] 连接headers:', connectHeaders);
-        
-        stompClient.connect(connectHeaders, function(frame) {
-            console.log('[DEBUG] WebSocket连接成功');
-            console.log('[DEBUG] 连接帧:', frame);
-            
-            // 隐藏加载提示
-            hideLoading();
+        // 设置连接成功和失败的回调
+        stompClient.connect({}, function(frame) {
+            // 确保使用正确的玩家ID
             
             // 订阅游戏状态更新
             console.log('[DEBUG] 订阅游戏状态更新');
@@ -167,6 +167,37 @@ function connectWebSocket() {
                     showGameNotification(notification);
                 } catch (error) {
                     console.error('[DEBUG] 解析游戏通知失败:', error);
+                    console.error('[DEBUG] 原始消息:', message.body);
+                }
+            });
+
+            // 订阅聊天消息
+            console.log('[DEBUG] 订阅聊天消息');
+            console.log('[DEBUG] 聊天主题:', '/topic/game/chat/' + currentRoomId);
+            stompClient.subscribe('/topic/game/chat/' + currentRoomId, function(message) {
+                try {
+                    console.log('[DEBUG] 收到聊天消息原始数据:', message.body);
+                    const chatMessage = JSON.parse(message.body);
+                    console.log('[DEBUG] 解析后的聊天消息:', chatMessage);
+                    
+                    // 如果不是自己发送的消息，则显示（自己的消息在发送时就已显示）
+                    const senderID = typeof chatMessage.playerId === 'object' ? 
+                        chatMessage.playerId.id : chatMessage.playerId;
+                    const currentPlayerID = typeof currentPlayer === 'object' ? 
+                        currentPlayer.id : currentPlayer;
+                    
+                    // 确保不会重复显示自己发送的消息
+                    if (senderID !== currentPlayerID) {
+                        const formattedMessage = {
+                            player: chatMessage.playerName || chatMessage.playerId,
+                            content: chatMessage.content,
+                            timestamp: chatMessage.timestamp,
+                            isSelf: false
+                        };
+                        addChatMessage(formattedMessage);
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] 解析聊天消息失败:', error);
                     console.error('[DEBUG] 原始消息:', message.body);
                 }
             });
@@ -225,7 +256,6 @@ function connectWebSocket() {
             console.log('[DEBUG] 所有订阅设置完成，开始尝试加入房间');
             // 尝试加入房间
             tryJoinRoom(3);
-
         }, function(error) {
             console.error('[DEBUG] WebSocket连接失败:', error);
             showError('连接服务器失败，请刷新页面重试');
@@ -253,7 +283,7 @@ function tryJoinRoom(attempts) {
     if (attempts <= 0) {
         console.error('[DEBUG] 加入房间失败，已达最大尝试次数');
         showError('加入房间失败，请返回大厅后重试');
-        hideLoading();
+        hideLoading(); // 确保无论如何都隐藏加载提示
         return;
     }
     
@@ -266,12 +296,32 @@ function tryJoinRoom(attempts) {
         if (!playerId) {
             console.error('[DEBUG] 无效的玩家ID');
             showError('登录状态异常，请重新登录');
+            hideLoading(); // 确保无论如何都隐藏加载提示
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1500);
             return;
         }
+        
+        // 确保房间ID有效 - 优先使用URL参数，其次是localStorage，最后是全局变量
+        const urlParams = new URLSearchParams(window.location.search);
+        let roomIdToUse = urlParams.get('roomId') || localStorage.getItem('currentRoomId') || currentRoomId;
+        
+        if (!roomIdToUse) {
+            console.error('[DEBUG] 房间ID无效，无法加入房间');
+            showError('房间ID无效，请返回大厅重新加入');
+            hideLoading();
+            setTimeout(() => {
+                window.location.href = 'lobby.html';
+            }, 1500);
+            return;
+        }
+        
+        // 更新当前使用的房间ID
+        currentRoomId = roomIdToUse;
+        console.log('[DEBUG] 使用房间ID:', currentRoomId);
 
+        // 记录请求详情用于调试
         console.log('[DEBUG] 发送加入房间请求:', {
             type: "JOIN",
             roomId: currentRoomId,
@@ -285,12 +335,21 @@ function tryJoinRoom(attempts) {
             playerId: playerId
         }));
         
-        // 如果还有尝试次数，继续尝试
+        // 设置检查状态的定时器
         setTimeout(() => {
             // 如果还没有收到状态更新，重试
             if (!gameState.roomId) {
                 console.log('[DEBUG] 未收到房间状态，重试加入');
                 tryJoinRoom(attempts - 1);
+            } else {
+                // 确保如果收到房间状态但没有调用hideLoading，这里强制隐藏加载提示
+                hideLoading();
+                console.log('[DEBUG] 收到房间状态，房间ID:', gameState.roomId);
+                // 确保currentRoomId和gameState.roomId一致
+                if (currentRoomId !== gameState.roomId) {
+                    console.log('[DEBUG] 更新currentRoomId:', gameState.roomId);
+                    currentRoomId = gameState.roomId;
+                }
             }
         }, 2000); // 增加等待时间到2秒
     } catch (error) {
@@ -300,7 +359,43 @@ function tryJoinRoom(attempts) {
     }
 }
 
-// 添加一个新的函数来处理加入房间的响应
+// 添加一个新的函数在玩家加入房间后发送通知
+function announcePlayerJoined() {
+    if (!stompClient || !stompClient.connected) {
+        console.error('[DEBUG] 无法发送玩家加入通知：WebSocket未连接');
+        return;
+    }
+    
+    try {
+        // 确保玩家ID和房间ID有效
+        const playerId = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+        const roomId = gameState.roomId || currentRoomId;
+        
+        if (!playerId || !roomId) {
+            console.error('[DEBUG] 无法发送玩家加入通知：玩家ID或房间ID无效');
+            return;
+        }
+        
+        // 创建加入通知
+        const joinNotification = {
+            type: "JOIN",
+            roomId: roomId,
+            playerId: playerId,
+            playerName: typeof currentPlayer === 'object' ? currentPlayer.name : playerId,
+            content: `玩家 ${typeof currentPlayer === 'object' ? currentPlayer.name : playerId} 加入了房间`,
+            timestamp: new Date().getTime()
+        };
+        
+        console.log('[DEBUG] 发送玩家加入通知:', joinNotification);
+        
+        // 发送消息到特定主题
+        stompClient.send(`/app/game/notification/${roomId}`, {}, JSON.stringify(joinNotification));
+    } catch (error) {
+        console.error('[DEBUG] 发送玩家加入通知时出错:', error);
+    }
+}
+
+// 在handleJoinRoomResponse函数中调用公告函数
 function handleJoinRoomResponse(response) {
     console.log('[DEBUG] 收到加入房间响应:', response);
     
@@ -309,13 +404,37 @@ function handleJoinRoomResponse(response) {
         hideLoading();
         showSuccess('成功加入房间');
         
+        // 确保保存房间ID
+        if (response.roomId) {
+            console.log('[DEBUG] 从响应中获取房间ID:', response.roomId);
+            currentRoomId = response.roomId;
+            gameState.roomId = response.roomId;
+            
+            // 保存到localStorage，便于页面刷新后恢复
+            localStorage.setItem('currentRoomId', response.roomId);
+        } else if (currentRoomId) {
+            console.log('[DEBUG] 使用当前房间ID:', currentRoomId);
+            // 确保gameState中也有roomId
+            gameState.roomId = currentRoomId;
+        } else {
+            console.warn('[DEBUG] 无法获取有效的房间ID');
+        }
+        
         // 更新游戏状态
         if (response.gameState) {
+            // 确保gameState中有roomId
+            if (!response.gameState.roomId && gameState.roomId) {
+                response.gameState.roomId = gameState.roomId;
+            }
             updateGameState(response.gameState);
         }
+        
+        // 发送玩家加入通知
+        setTimeout(() => announcePlayerJoined(), 500);
     } else {
         console.error('[DEBUG] 加入房间失败:', response.message);
         showError(response.message || '加入房间失败');
+        hideLoading(); // 确保隐藏加载提示，即使加入失败
         setTimeout(() => {
             window.location.href = 'lobby.html';
         }, 1500);
@@ -323,21 +442,71 @@ function handleJoinRoomResponse(response) {
 }
 
 function handleGameState(state) {
-    console.log('收到游戏状态更新:', state);
-
-    // 更新全局游戏状态
-    gameState = {
-        ...gameState,
-        roomId: state.roomId,
-        roomName: state.roomName,
-        status: state.status,
-        gameStatus: state.gameStatus,
-        currentPlayer: state.currentPlayer,
-        hostId: state.hostId,
-        players: state.players,
-        readyPlayers: state.readyPlayers,
-        maxPlayers: state.maxPlayers
-    };
+    // 保存当前状态
+    console.log('[DEBUG] 处理游戏状态更新:', state);
+    
+    // 确保 gameState 初始化
+    if (!gameState) {
+        gameState = {
+            roomId: null,
+            roomName: null,
+            status: null,
+            players: [],
+            readyPlayers: [],
+            hand: [],
+            isHost: false,
+            isMyTurn: false,
+            maxPlayers: 4 // 默认最大玩家数
+        };
+    }
+    
+    // 更新游戏房间ID和名称
+    if (state.roomId) {
+        gameState.roomId = state.roomId;
+        // 存储到会话存储
+        sessionStorage.setItem('currentRoomId', state.roomId);
+        currentRoomId = state.roomId;
+    } else if (currentRoomId && !gameState.roomId) {
+        // 如果状态更新中没有roomId但currentRoomId存在，使用currentRoomId
+        console.log('[DEBUG] 状态中没有roomId，使用当前roomId:', currentRoomId);
+        gameState.roomId = currentRoomId;
+        state.roomId = currentRoomId; // 确保state也有正确的roomId以供后续处理
+    }
+    
+    if (state.roomName) {
+        gameState.roomName = state.roomName;
+    }
+    
+    // 更新最大玩家数
+    if (state.maxPlayers) {
+        console.log('[DEBUG] 从服务器更新最大玩家数:', state.maxPlayers);
+        gameState.maxPlayers = state.maxPlayers;
+    } else if (!gameState.maxPlayers) {
+        gameState.maxPlayers = 4; // 设置默认值
+    }
+    
+    // 更新游戏状态
+    if (state.gameStatus) {
+        gameState.status = state.gameStatus;
+    }
+    
+    // 更新玩家列表
+    if (state.players) {
+        gameState.players = state.players;
+    }
+    
+    // 更新准备玩家列表
+    if (state.readyPlayers) {
+        gameState.readyPlayers = state.readyPlayers;
+    } else if (!gameState.readyPlayers) {
+        gameState.readyPlayers = []; // 确保有一个默认的空数组
+    }
+    
+    // 检查是否是房主
+    if (state.hostId) {
+        gameState.hostId = state.hostId;
+        gameState.isHost = currentPlayer.id === state.hostId || currentPlayer === state.hostId;
+    }
 
     // 更新手牌
     if (state.hand) {
@@ -429,19 +598,78 @@ function getStatusClass(status) {
 }
 
 function showGameNotification(notification) {
+    // 如果是JOIN类型的通知，确保房间ID是正确的
+    if (notification.type === 'JOIN') {
+        // 如果通知中的roomId为null但currentRoomId存在，使用当前房间ID
+        if (!notification.roomId && currentRoomId) {
+            console.log('[DEBUG] 通知中的roomId为null，使用当前房间ID:', currentRoomId);
+            notification.roomId = currentRoomId;
+        }
+        
+        // 如果有玩家加入，更新房间玩家信息
+        if (notification.playerId && notification.success) {
+            console.log('[DEBUG] 玩家加入房间成功:', notification.playerId);
+            
+            // 确保gameState有players数组
+            if (!gameState.players) {
+                gameState.players = [];
+            }
+            
+            // 检查玩家是否已在列表中
+            const playerExists = gameState.players.some(p => {
+                if (typeof p === 'object') {
+                    return p.id === notification.playerId;
+                } else {
+                    return p === notification.playerId;
+                }
+            });
+            
+            // 如果玩家不在列表中，添加到玩家列表
+            if (!playerExists) {
+                console.log('[DEBUG] 添加新玩家到列表:', notification.playerId);
+                gameState.players.push(notification.playerId);
+                
+                // 更新玩家列表UI
+                updatePlayerList(gameState);
+            }
+        }
+    }
+    
     // 根据通知类型选择不同的提示样式
     switch (notification.type) {
         case 'ERROR':
-            showError(notification.message);
+            showError(notification.message || notification.content);
             break;
         case 'SUCCESS':
-            showSuccess(notification.message);
+            showSuccess(notification.message || notification.content);
             break;
         case 'WARNING':
-            showWarning(notification.message);
+            showWarning(notification.message || notification.content);
+            break;
+        case 'JOIN':
+            // 玩家加入特殊处理
+            showInfo(notification.content || `玩家 ${notification.playerId} 加入了房间`);
+            break;
+        case 'LEAVE':
+            // 玩家离开特殊处理
+            showInfo(notification.content || `玩家 ${notification.playerId} 离开了房间`);
+            
+            // 如果有玩家离开，从玩家列表中移除
+            if (notification.playerId && gameState.players) {
+                gameState.players = gameState.players.filter(p => {
+                    if (typeof p === 'object') {
+                        return p.id !== notification.playerId;
+                    } else {
+                        return p !== notification.playerId;
+                    }
+                });
+                
+                // 更新玩家列表UI
+                updatePlayerList(gameState);
+            }
             break;
         default:
-            showInfo(notification.message);
+            showInfo(notification.message || notification.content || '系统消息');
     }
 }
 
@@ -494,14 +722,31 @@ function updatePlayerList(state) {
     if (!state || !state.players) return;
     
     state.players.forEach(player => {
-        const isHost = player.id === gameState.hostId;
-        const isReady = gameState.readyPlayers.includes(player.id);
-        const isCurrentPlayer = gameState.currentPlayer === player.id;
-        const isMe = player.id === currentPlayer;
+        // 确保player.id存在
+        const playerId = player.id || (typeof player === 'string' ? player : '');
+        
+        const isHost = playerId === gameState.hostId;
+        const isReady = gameState.readyPlayers.includes(playerId);
+        const isCurrentPlayer = gameState.currentPlayer === playerId;
+        
+        // 确保currentPlayer正确比较
+        const currentPlayerId = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+        const isMe = playerId === currentPlayerId;
         
         // 检查是否是机器人
-        const isRobot = player.id && player.id.startsWith('robot_');
-        const playerName = isRobot ? `机器人 ${player.id.split('_')[1]}` : player.id;
+        const isRobot = playerId && playerId.startsWith('robot_');
+        
+        // 获取正确的玩家名称
+        let playerName;
+        if (isRobot) {
+            playerName = `机器人 ${playerId.split('_')[1]}`;
+        } else if (player.name) {
+            playerName = player.name;
+        } else if (typeof player === 'string') {
+            playerName = player;
+        } else {
+            playerName = playerId || '未知玩家';
+        }
         
         const playerItem = document.createElement('div');
         playerItem.className = 'player-item' + (isCurrentPlayer ? ' current-player' : '');
@@ -512,17 +757,40 @@ function updatePlayerList(state) {
         if (isMe) badges += '<span class="badge bg-info">我</span> ';
         if (isRobot) badges += '<span class="badge bg-secondary">机器人</span> ';
         
-        playerItem.innerHTML = `
-            <div class="player-name">
-                ${playerName} ${badges}
-            </div>
-            <div class="player-status">
-                <span class="badge ${isCurrentPlayer ? 'bg-warning' : 'bg-secondary'}">
-                    ${isCurrentPlayer ? '当前玩家' : '等待中'}
-                </span>
-            </div>
-            <div class="player-cards">手牌: ${player.cardCount || 0}张</div>
+        // 创建玩家信息元素
+        const playerNameDiv = document.createElement('div');
+        playerNameDiv.className = 'player-name';
+        playerNameDiv.innerHTML = `${playerName} ${badges}`;
+        
+        // 创建玩家状态元素
+        const playerStatusDiv = document.createElement('div');
+        playerStatusDiv.className = 'player-status';
+        playerStatusDiv.innerHTML = `
+            <span class="badge ${isCurrentPlayer ? 'bg-warning' : 'bg-secondary'}">
+                ${isCurrentPlayer ? '当前玩家' : '等待中'}
+            </span>
+            <span class="player-cards">手牌: ${player.cardCount || 0}张</span>
         `;
+        
+        // 添加玩家信息和状态
+        playerItem.appendChild(playerNameDiv);
+        playerItem.appendChild(playerStatusDiv);
+        
+        // 如果是房主且当前玩家是机器人，添加删除机器人按钮
+        if (gameState.isHost && isRobot) {
+            const playerActionsDiv = document.createElement('div');
+            playerActionsDiv.className = 'player-actions';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-danger btn-sm btn-robot-remove';
+            removeBtn.textContent = '移除';
+            removeBtn.onclick = function() {
+                removeSpecificRobot(playerId);
+            };
+            
+            playerActionsDiv.appendChild(removeBtn);
+            playerItem.appendChild(playerActionsDiv);
+        }
         
         playerListElement.appendChild(playerItem);
     });
@@ -535,30 +803,80 @@ function updateHand(hand) {
     hand.forEach(card => {
         const cardElement = document.createElement('div');
         cardElement.className = `card ${gameState.selectedCards.has(card.id) ? 'selected' : ''}`;
-        cardElement.innerHTML = `
-            <span class="lt">${card.value}</span>
-            <span class="cm">${card.suit}</span>
-            <span class="rb">${card.value}</span>
-        `;
-        cardElement.onclick = () => toggleCardSelection(card.id);
+        
+        // 确定牌面颜色（红色或黑色）
+        const isRed = card.suit === '♥' || card.suit === '♦';
+        const colorClass = isRed ? 'red' : 'black';
+        
+        // 处理特殊牌（大小王）
+        if (card.value === 'Joker') {
+            cardElement.innerHTML = `
+                <div class="rank joker">JOKER</div>
+                <div class="center-icon joker">🃏</div>
+            `;
+        } else {
+            cardElement.innerHTML = `
+                <div class="rank ${colorClass}">${card.value}</div>
+                <div class="suit ${colorClass}">${card.suit}</div>
+                <div class="center-icon ${colorClass}">${card.suit}</div>
+            `;
+        }
+        
+        // 添加点击事件和动画效果
+        cardElement.onclick = () => {
+            if (gameState.isMyTurn) {
+                toggleCardSelection(card.id);
+                playSound('clickSound');
+            }
+        };
+        
+        // 添加悬停动画数据
+        cardElement.dataset.cardId = card.id;
+        
         playerHand.appendChild(cardElement);
     });
+    
+    console.log(`[DEBUG] 更新了玩家手牌，共${hand.length}张`);
 }
 
 function updateCurrentPile(pile) {
     const currentPile = document.getElementById('currentPile');
     currentPile.innerHTML = '';
 
+    if (!pile || pile.length === 0) {
+        const emptyText = document.createElement('div');
+        emptyText.className = 'empty-pile-text';
+        emptyText.textContent = '牌堆为空';
+        currentPile.appendChild(emptyText);
+        return;
+    }
+
     pile.forEach(card => {
         const cardElement = document.createElement('div');
         cardElement.className = 'card pile-card';
-        cardElement.innerHTML = `
-            <span class="lt">${card.value}</span>
-            <span class="cm">${card.suit}</span>
-            <span class="rb">${card.value}</span>
-        `;
+        
+        // 确定牌面颜色（红色或黑色）
+        const isRed = card.suit === '♥' || card.suit === '♦';
+        const colorClass = isRed ? 'red' : 'black';
+        
+        // 处理特殊牌（大小王）
+        if (card.value === 'Joker') {
+            cardElement.innerHTML = `
+                <div class="rank joker">JOKER</div>
+                <div class="center-icon joker">🃏</div>
+            `;
+        } else {
+            cardElement.innerHTML = `
+                <div class="rank ${colorClass}">${card.value}</div>
+                <div class="suit ${colorClass}">${card.suit}</div>
+                <div class="center-icon ${colorClass}">${card.suit}</div>
+            `;
+        }
+        
         currentPile.appendChild(cardElement);
     });
+    
+    console.log(`[DEBUG] 更新了当前牌堆，共${pile.length}张`);
 }
 
 function updateHistory(history) {
@@ -623,6 +941,23 @@ function playCards() {
     // 清除选择
     clearSelection();
     playSound('cardSound');
+    
+    // 显示出牌动画效果
+    showPlayAnimation();
+}
+
+// 显示出牌动画效果
+function showPlayAnimation() {
+    // 创建动画容器
+    const animContainer = document.createElement('div');
+    animContainer.className = 'play-animation';
+    animContainer.innerHTML = '<div class="play-effect">出牌!</div>';
+    document.body.appendChild(animContainer);
+    
+    // 2秒后移除动画
+    setTimeout(() => {
+        animContainer.remove();
+    }, 1000);
 }
 
 function pass() {
@@ -634,10 +969,32 @@ function pass() {
 
 function challenge() {
     if (!gameState.isMyTurn) return;
-
-    // 发送质疑请求
-    stompClient.send("/app/game/challenge", {}, {});
+    
+    // 发送挑战请求
+    stompClient.send("/app/game/challenge", {}, JSON.stringify({}));
+    
+    // 播放挑战声音
     playSound('challengeSound');
+    
+    // 显示挑战动画
+    showChallengeAnimation();
+    
+    // 清除所选卡牌
+    clearSelection();
+}
+
+// 显示挑战动画
+function showChallengeAnimation() {
+    // 创建动画容器
+    const animContainer = document.createElement('div');
+    animContainer.className = 'play-animation';
+    animContainer.innerHTML = '<div class="play-effect" style="color: #dc3545; text-shadow: 0 0 10px #dc3545, 0 0 20px #dc3545, 0 0 30px #dc3545;">质疑!</div>';
+    document.body.appendChild(animContainer);
+    
+    // 1.5秒后移除动画
+    setTimeout(() => {
+        animContainer.remove();
+    }, 1500);
 }
 
 function toggleReady() {
@@ -648,10 +1005,14 @@ function toggleReady() {
     }
 
     console.log('切换准备状态');
+    
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
     stompClient.send("/app/game/action", {}, JSON.stringify({
         type: "READY",
         roomId: currentRoomId,
-        playerId: currentPlayer,
+        playerId: playerIdStr,
         ready: !gameState.isReady
     }));
 }
@@ -669,11 +1030,14 @@ function startGame() {
         return;
     }
 
-    console.log('开始游戏');
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
     stompClient.send("/app/game/action", {}, JSON.stringify({
         type: "START",
         roomId: currentRoomId,
-        playerId: currentPlayer
+        playerId: playerIdStr,
+        deckCount: 1  // 默认使用1副牌
     }));
 }
 
@@ -683,10 +1047,13 @@ function addRobots() {
     const count = parseInt(document.getElementById('robotCount').value);
     const difficulty = document.getElementById('robotDifficulty').value;
 
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+
     // 发送添加机器人请求
     stompClient.send("/app/game/robots/add", {}, JSON.stringify({
         roomId: gameState.roomId,
-        playerId: currentPlayer,
+        playerId: playerIdStr,
         count: count,
         difficulty: difficulty
     }));
@@ -695,10 +1062,13 @@ function addRobots() {
 function removeRobots() {
     if (!gameState.isHost) return;
 
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+
     // 发送移除机器人请求
     stompClient.send("/app/game/robots/remove", {}, JSON.stringify({
         roomId: gameState.roomId,
-        playerId: currentPlayer
+        playerId: playerIdStr
     }));
 }
 
@@ -707,43 +1077,163 @@ function sendMessage() {
     const message = input.value.trim();
     
     if (message) {
-        // 发送聊天消息
-        stompClient.send("/app/game/chat", {}, JSON.stringify({
-            content: message
-        }));
-        input.value = '';
+        try {
+            console.log('[DEBUG] 准备发送聊天消息:', message);
+            
+            // 获取当前玩家信息
+            const playerData = typeof currentPlayer === 'object' ? 
+                currentPlayer : 
+                JSON.parse(localStorage.getItem('player'));
+            
+            if (!playerData) {
+                console.error('[DEBUG] 发送聊天消息失败: 未找到玩家信息');
+                return;
+            }
+            
+            // 确保我们有正确的房间ID
+            const roomId = gameState.roomId || currentRoomId;
+            if (!roomId) {
+                console.error('[DEBUG] 发送聊天消息失败: 未找到房间ID');
+                return;
+            }
+            
+            // 创建消息对象
+            const chatMessage = {
+                roomId: roomId,
+                playerId: typeof playerData === 'object' ? playerData.id : playerData,
+                playerName: typeof playerData === 'object' ? playerData.name : playerData,
+                content: message,
+                timestamp: new Date().getTime()
+            };
+            
+            // 发送聊天消息到房间主题
+            stompClient.send(`/app/game/chat/${roomId}`, {}, JSON.stringify(chatMessage));
+            
+            // 立即在本地显示消息（不等待服务器响应）
+            const localMessage = {
+                player: playerData.name || playerData.id || playerData,
+                content: message,
+                timestamp: new Date().getTime(),
+                isSelf: true
+            };
+            addChatMessage(localMessage);
+            
+            // 清空输入框
+            input.value = '';
+            
+            console.log('[DEBUG] 聊天消息已发送');
+        } catch (error) {
+            console.error('[DEBUG] 发送聊天消息时出错:', error);
+            showError('发送消息失败');
+        }
     }
 }
 
 function addChatMessage(message) {
     const chatMessages = document.getElementById('chatMessages');
-    const messageElement = document.createElement('div');
-    messageElement.className = `chat-message ${message.player === currentPlayer ? 'self' : ''}`;
-    messageElement.innerHTML = `
-        <span class="player">${message.player}:</span>
-        <span class="content">${message.content}</span>
-    `;
-    chatMessages.appendChild(messageElement);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (!chatMessages) {
+        console.error('[DEBUG] 未找到聊天消息容器');
+        return;
+    }
+    
+    try {
+        console.log('[DEBUG] 添加聊天消息:', message);
+        
+        // 获取当前时间
+        const now = new Date();
+        const timeStr = message.timestamp ? 
+            new Date(message.timestamp).toLocaleTimeString() : 
+            now.toLocaleTimeString();
+        
+        // 确保玩家名称正确显示
+        const playerName = typeof message.player === 'object' ? 
+            (message.player.name || message.player.id || '未知') : 
+            (message.playerName || message.player || '未知');
+        
+        // 确定是否是当前玩家发送的消息
+        const isSelf = message.isSelf || false;
+        
+        const messageElement = document.createElement('div');
+        messageElement.className = `chat-message ${isSelf ? 'self' : ''}`;
+        messageElement.innerHTML = `
+            <span class="player">${playerName}</span>
+            <span class="content">${message.content}</span>
+            <span class="time">${timeStr}</span>
+        `;
+        
+        chatMessages.appendChild(messageElement);
+        
+        // 自动滚动到底部
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        console.log('[DEBUG] 聊天消息已添加到DOM');
+    } catch (error) {
+        console.error('[DEBUG] 添加聊天消息时出错:', error);
+    }
 }
 
-function showGameResult(result) {
-    const modal = new bootstrap.Modal(document.getElementById('gameResultModal'));
-    const rankingList = document.getElementById('playerRankingFinal');
+function updateGameResult(result) {
+    // 获取并重置游戏结果模态框内容
+    const gameResultModal = document.getElementById('gameResultModal');
+    const resultTitle = document.getElementById('gameResultTitle');
+    const resultContent = document.getElementById('gameResultContent');
     
-    rankingList.innerHTML = '';
-    result.ranking.forEach((player, index) => {
-        const playerElement = document.createElement('div');
-        playerElement.className = 'ranking-item';
-        playerElement.innerHTML = `
-            <span class="rank">${index + 1}</span>
-            <span class="player">${player.name}</span>
-        `;
-        rankingList.appendChild(playerElement);
-    });
-
-    modal.show();
-    playSound('winSound');
+    if (!gameResultModal || !resultTitle || !resultContent) {
+        console.error('[DEBUG] 游戏结果模态框不存在');
+        return;
+    }
+    
+    // 设置标题和内容
+    const isWinner = result.winner === currentPlayer;
+    resultTitle.textContent = isWinner ? '恭喜您赢得了游戏！' : '游戏结束';
+    resultTitle.className = isWinner ? 'modal-title text-success' : 'modal-title text-info';
+    
+    // 添加游戏结果信息
+    let resultHtml = `
+        <div class="game-result ${isWinner ? 'game-result-highlight' : ''}">
+            <h4 class="mb-3 ${isWinner ? 'text-success' : 'text-info'}">
+                ${isWinner ? '您是本局游戏的赢家！' : `玩家 ${result.winner} 赢得了游戏`}
+            </h4>
+            <div class="player-results mb-3">
+                <h5>游戏成绩：</h5>
+                <ul class="list-group">
+    `;
+    
+    // 添加玩家详情
+    if (result.playerDetails) {
+        Object.entries(result.playerDetails).forEach(([player, details]) => {
+            const isCurrentPlayer = player === currentPlayer;
+            resultHtml += `
+                <li class="list-group-item ${isCurrentPlayer ? 'active' : ''}">
+                    ${isCurrentPlayer ? '您' : player}: 
+                    <span class="badge ${details.winner ? 'bg-success' : 'bg-secondary'}">
+                        ${details.winner ? '获胜' : '失败'}
+                    </span>
+                    <span class="float-end">
+                        手牌: ${details.remainingCards} | 出牌: ${details.playedCards}
+                    </span>
+                </li>
+            `;
+        });
+    }
+    
+    resultHtml += `
+                </ul>
+            </div>
+            <div class="text-center mt-3">
+                <p>${isWinner ? '祝贺您取得胜利！' : '再接再厉，下次一定会赢！'}</p>
+            </div>
+        </div>
+    `;
+    
+    resultContent.innerHTML = resultHtml;
+    
+    // 播放相应的声音
+    playSound(isWinner ? 'victorySound' : 'defeatSound');
+    
+    // 显示模态框
+    const bsModal = new bootstrap.Modal(gameResultModal);
+    bsModal.show();
 }
 
 function restartGame() {
@@ -752,66 +1242,25 @@ function restartGame() {
 }
 
 function leaveRoom() {
-    if (confirm('确定要离开房间吗？')) {
-        try {
-            console.log('开始离开房间流程');
-            
-            if (stompClient && stompClient.connected) {
-                console.log('发送离开房间消息');
-                showInfo('正在离开房间...');
-                
-                // 获取当前房间ID
-                const roomId = gameState.roomId || currentRoomId;
-                
-                // 获取当前玩家信息
-                const playerData = JSON.parse(localStorage.getItem('player'));
-                const playerId = playerData ? playerData.id : currentPlayer;
-                
-                // 确保playerId是字符串而不是对象
-                const playerIdStr = typeof playerId === 'object' ? playerId.id : playerId;
-                
-                console.log(`准备离开房间: ${roomId}, 玩家: ${playerIdStr}`);
-                
-                // 发送离开房间消息 - 使用专用端点
-                stompClient.send("/app/rooms/leave", {}, JSON.stringify({
-                    roomId: roomId,
-                    playerId: playerIdStr
-                }));
-                
-                // 清除房间相关数据
-                clearRoomData();
-                
-                // 延迟一下以确保服务器处理完成
-                setTimeout(() => {
-                    // 断开WebSocket连接
-                    stompClient.disconnect(() => {
-                        console.log('WebSocket连接已断开，返回大厅');
-                        showSuccess('已成功离开房间');
-                        setTimeout(() => {
-                            window.location.href = 'lobby.html';
-                        }, 500);
-                    });
-                }, 500);
-            } else {
-                console.log('WebSocket未连接，直接返回大厅');
-                
-                // 清除房间相关数据
-                clearRoomData();
-                
-                window.location.href = 'lobby.html';
-            }
-        } catch (error) {
-            console.error('离开房间时发生错误:', error);
-            showError('离开房间时出错，将返回大厅');
-            
-            // 确保即使发生错误也清理数据
-            clearRoomData();
-            
-            setTimeout(() => {
-                window.location.href = 'lobby.html';
-            }, 1500);
-        }
+    if (!stompClient || !stompClient.connected) {
+        window.location.href = 'lobby.html';
+        return;
     }
+
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
+    stompClient.send("/app/game/action", {}, JSON.stringify({
+        type: "LEAVE",
+        roomId: currentRoomId,
+        playerId: playerIdStr
+    }));
+
+    // 清除房间数据
+    clearRoomData();
+    
+    // 返回大厅
+    window.location.href = 'lobby.html';
 }
 
 // 清理房间相关数据
@@ -891,13 +1340,19 @@ function toggleSound() {
     soundButton.innerHTML = gameState.soundEnabled ? '🔊' : '🔇';
 }
 
-function playSound(soundId) {
+function playSound(soundName) {
     if (!gameState.soundEnabled) return;
     
-    const sound = document.getElementById(soundId);
+    const sound = sounds[soundName];
     if (sound) {
+        // 重置声音以便可以连续播放
+        sound.pause();
         sound.currentTime = 0;
-        sound.play();
+        
+        // 播放声音
+        sound.play().catch(e => {
+            console.error('[DEBUG] 播放声音失败:', e);
+        });
     }
 }
 
@@ -1004,38 +1459,65 @@ function checkConnectionStatus() {
 function handleForceLogout(notification) {
     console.log('[DEBUG] 收到强制登出通知:', notification);
     
-    // 显示消息
-    showWarning(notification.message || '您已被登出，请重新登录');
+    // 显示被踢出的消息
+    const reason = notification.reason || '违反规则';
+    const message = notification.message || `您已被管理员踢出游戏，原因：${reason}`;
     
-    // 清除游戏数据
-    clearRoomData();
-    
-    // 断开连接并清除用户数据
-    if (stompClient && stompClient.connected) {
-        stompClient.disconnect(function() {
-            console.log('[DEBUG] WebSocket连接已断开');
-            
-            // 清理所有本地存储数据
-            localStorage.removeItem('player');
-            localStorage.removeItem('currentRoomId');
-            sessionStorage.clear();
-            
-            // 延迟跳转以确保消息显示
-            setTimeout(() => {
-                console.log('[DEBUG] 重定向到登录页面');
-                window.location.href = 'index.html';
-            }, 2000);
-        });
+    // 使用layer显示消息
+    if (typeof layer !== 'undefined') {
+        layer.msg(message, {icon: 2, time: 3000});
     } else {
-        // 如果已经断开连接，直接清理并跳转
-        localStorage.removeItem('player');
-        localStorage.removeItem('currentRoomId');
-        sessionStorage.clear();
-        
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 2000);
+        alert(message);
     }
+    
+    // 清除本地存储中的玩家数据
+    localStorage.removeItem('player');
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentRoom');
+    localStorage.removeItem('readyPlayers');
+    
+    // 清除会话存储
+    sessionStorage.clear();
+    
+    // 尝试删除游戏缓存
+    try {
+        if (window.indexedDB) {
+            const request = window.indexedDB.deleteDatabase('gameCache');
+            request.onsuccess = function() {
+                console.log('[DEBUG] 游戏缓存已成功删除');
+            };
+            request.onerror = function() {
+                console.error('[DEBUG] 无法删除游戏缓存');
+            };
+        }
+    } catch (e) {
+        console.error('[DEBUG] 删除游戏缓存时出错:', e);
+    }
+    
+    // 调用其他清理函数（如果存在）
+    if (typeof clearRoomData === 'function') {
+        clearRoomData();
+    }
+    
+    if (typeof clearGameCache === 'function') {
+        clearGameCache();
+    }
+    
+    // 断开WebSocket连接
+    if (stompClient && stompClient.connected) {
+        stompClient.disconnect();
+        console.log('[DEBUG] WebSocket连接已断开');
+    }
+    
+    // 设置踢出标志和时间
+    localStorage.setItem('kicked_out', 'true');
+    localStorage.setItem('kicked_time', Date.now().toString());
+    localStorage.setItem('kicked_reason', reason);
+    
+    // 延迟跳转到登录页面，给用户一点时间看到消息
+    setTimeout(function() {
+        window.location.href = '/index.html?reason=' + encodeURIComponent('您已被踢出游戏');
+    }, 2000);
 }
 
 // 处理强制离开房间通知
@@ -1065,69 +1547,100 @@ function handleForceRoomExit(notification) {
 }
 
 function updateUI(state) {
-    // 更新房间信息
-    document.getElementById('roomInfo').textContent = `房间: ${state.roomName || '游戏房间'} (${state.players.length}/${state.maxPlayers || 4})`;
+    if (!state) {
+        console.error('[DEBUG] 更新UI失败: 状态对象为空');
+        return;
+    }
     
-    // 更新游戏状态
-    const statusElement = document.getElementById('gameStatus');
-    statusElement.textContent = getGameStatusText(state.gameStatus);
-    statusElement.className = 'badge ' + getStatusClass(state.gameStatus);
+    console.log('[DEBUG] 更新UI:', state);
     
-    // 更新当前玩家显示
-    document.getElementById('currentPlayer').textContent = `当前玩家: ${currentPlayer}`;
-    
-    // 检查是否是房主
-    gameState.isHost = currentPlayer === state.hostId;
-    
-    // 显示/隐藏准备按钮和房主控制
-    const readyBtn = document.getElementById('readyBtn');
-    const hostControls = document.getElementById('hostControls');
-    const startBtn = document.getElementById('startBtn');
-    
-    if (state.gameStatus === 'WAITING') {
-        // 显示房主控制面板（如果是房主）
-        hostControls.style.display = gameState.isHost ? 'block' : 'none';
-        
-        // 显示/隐藏机器人控制面板
-        const robotControls = hostControls.querySelector('.robot-controls');
-        if (robotControls) {
-            // 在游戏未开始且是房主的情况下显示机器人控制
-            robotControls.style.display = gameState.isHost ? 'block' : 'none';
+    try {
+        // 更新房间信息
+        const roomInfoElement = document.getElementById('roomInfo');
+        if (roomInfoElement) {
+            const players = state.players || [];
+            // 优先使用state中的maxPlayers，其次是gameState中的，最后默认为4
+            const maxPlayers = state.maxPlayers || gameState.maxPlayers || 4;
+            console.log('[DEBUG] 显示房间信息 - 当前人数/最大人数:', players.length, '/', maxPlayers);
+            roomInfoElement.textContent = `房间: ${state.roomName || gameState.roomName || '游戏房间'} (${players.length}/${maxPlayers})`;
         }
         
-        // 显示/隐藏准备按钮
-        readyBtn.style.display = 'block';
+        // 更新游戏状态
+        const statusElement = document.getElementById('gameStatus');
+        if (statusElement) {
+            const gameStatus = state.gameStatus || gameState.status || 'WAITING';
+            statusElement.textContent = getGameStatusText(gameStatus);
+            statusElement.className = 'badge ' + getStatusClass(gameStatus);
+        }
         
-        // 更新准备按钮文本
-        const isReady = state.readyPlayers.includes(currentPlayer);
-        readyBtn.textContent = isReady ? '取消准备' : '准备';
-        readyBtn.className = 'btn ' + (isReady ? 'btn-warning' : 'btn-primary') + ' w-100 mt-2';
+        // 更新当前玩家显示
+        const currentPlayerElement = document.getElementById('currentPlayer');
+        if (currentPlayerElement) {
+            // 确保当前玩家名称正确显示
+            const playerName = typeof currentPlayer === 'object' ? currentPlayer.id || currentPlayer.name || '未知' : currentPlayer || '未知';
+            currentPlayerElement.textContent = `当前玩家: ${playerName}`;
+        }
         
-        // 显示/隐藏开始游戏按钮
-        const allReady = state.readyPlayers.length === state.players.length && state.players.length >= 2;
-        startBtn.style.display = (gameState.isHost && allReady) ? 'block' : 'none';
-    } else {
-        // 游戏已开始，隐藏准备按钮和房主控制
-        readyBtn.style.display = 'none';
-        hostControls.style.display = 'none';
-        startBtn.style.display = 'none';
+        // 显示/隐藏房主控制区
+        const hostControls = document.getElementById('hostControls');
+        const robotControls = document.getElementById('robotControls');
+        const readyBtn = document.getElementById('readyBtn');
+        const startBtn = document.getElementById('startBtn');
+        
+        if (state.gameStatus === 'WAITING' || gameState.status === 'WAITING') {
+            // 游戏等待中，显示房主控制
+            if (hostControls) {
+                // 只有房主能看到房主控制区
+                hostControls.style.display = gameState.isHost ? 'block' : 'none';
+            }
+            
+            if (robotControls) {
+                robotControls.style.display = gameState.isHost ? 'block' : 'none';
+            }
+            
+            // 显示/隐藏准备按钮
+            if (readyBtn) {
+                readyBtn.style.display = 'block';
+                
+                // 更新准备按钮文本，确保readyPlayers存在
+                const readyPlayers = state.readyPlayers || gameState.readyPlayers || [];
+                const isReady = readyPlayers.includes(currentPlayer);
+                readyBtn.textContent = isReady ? '取消准备' : '准备';
+                readyBtn.className = 'btn ' + (isReady ? 'btn-warning' : 'btn-primary') + ' w-100 mt-2';
+            }
+            
+            // 显示/隐藏开始游戏按钮
+            if (startBtn) {
+                const players = state.players || gameState.players || [];
+                const readyPlayers = state.readyPlayers || gameState.readyPlayers || [];
+                const allReady = readyPlayers.length === players.length && players.length >= 2;
+                startBtn.style.display = (gameState.isHost && allReady) ? 'block' : 'none';
+            }
+        } else {
+            // 游戏已开始，隐藏准备按钮和房主控制
+            if (readyBtn) readyBtn.style.display = 'none';
+            if (hostControls) hostControls.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'none';
+        }
+        
+        // 更新游戏控制面板
+        const gameControls = document.getElementById('gameControls');
+        if (gameControls) {
+            const gameStatus = state.gameStatus || gameState.status;
+            gameControls.style.display = (gameStatus === 'PLAYING') ? 'block' : 'none';
+        }
+        
+        // 更新当前牌堆信息
+        updateCurrentPile(state.currentPile);
+        
+        // 更新上一个声明
+        updateLastClaim(state.lastClaim);
+        
+        // 更新手牌和可用操作
+        updateHandAndActions(state);
+    } catch (error) {
+        console.error('[DEBUG] 更新UI出错:', error);
     }
-    
-    // 更新游戏控制面板
-    if (state.gameStatus === 'PLAYING') {
-        document.getElementById('gameControls').style.display = 'block';
-    } else {
-        document.getElementById('gameControls').style.display = 'none';
-    }
-    
-    // 更新当前牌堆信息
-    updateCurrentPile(state.currentPile);
-    
-    // 更新上一个声明
-    updateLastClaim(state.lastClaim);
-    
-    // 更新手牌和可用操作
-    updateHandAndActions(state);
 }
 
 // 检查禁用状态
@@ -1175,4 +1688,424 @@ function checkBanStatus() {
         sessionStorage.removeItem('banInfo');
         return false;
     }
-} 
+}
+
+// 添加updateLastClaim函数
+function updateLastClaim(claim) {
+    const lastClaimElement = document.getElementById('lastClaim');
+    if (!lastClaimElement) return;
+    
+    if (claim) {
+        // 如果存在span元素，更新它的内容，否则更新整个元素的内容
+        const spanElement = lastClaimElement.querySelector('span');
+        if (spanElement) {
+            spanElement.textContent = claim;
+        } else {
+            lastClaimElement.textContent = `最后声明: ${claim}`;
+        }
+        lastClaimElement.style.display = 'block';
+    } else {
+        lastClaimElement.style.display = 'none';
+    }
+    
+    console.log('[DEBUG] 更新最后声明:', claim);
+}
+
+// 更新手牌和可用操作
+function updateHandAndActions(state) {
+    // 更新手牌
+    if (state.hand && state.hand.length > 0) {
+        updateHand(state.hand);
+        
+        // 判断是否是当前玩家的回合
+        const isMyTurn = state.currentPlayer === currentPlayer;
+        gameState.isMyTurn = isMyTurn;
+        
+        // 启用或禁用玩家操作按钮
+        const playBtn = document.getElementById('playBtn');
+        const passBtn = document.getElementById('passBtn');
+        const challengeBtn = document.getElementById('challengeBtn');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        const declaredValueInput = document.getElementById('declaredValue');
+        
+        if (playBtn) playBtn.disabled = !isMyTurn;
+        if (passBtn) passBtn.disabled = !isMyTurn;
+        if (challengeBtn) challengeBtn.disabled = !isMyTurn;
+        if (selectAllBtn) selectAllBtn.disabled = !isMyTurn;
+        if (clearSelectionBtn) clearSelectionBtn.disabled = !isMyTurn;
+        if (declaredValueInput) declaredValueInput.disabled = !isMyTurn;
+        
+        // 添加高亮效果
+        if (playBtn) playBtn.classList.add('btn-primary');
+        if (passBtn) passBtn.classList.add('btn-primary');
+        if (challengeBtn) challengeBtn.classList.add('btn-danger');
+        
+        // 显示轮到您出牌的提示
+        showInfo('轮到您出牌了');
+    } else {
+        console.log('[DEBUG] 没有找到手牌数据或手牌为空');
+    }
+    
+    // 更新游戏操作区可见性
+    const gameControls = document.getElementById('gameControls');
+    if (gameControls) {
+        gameControls.style.display = state.status === 'PLAYING' ? 'block' : 'none';
+    }
+}
+
+// 启用玩家游戏操作
+function enablePlayerActions(state) {
+    console.log('[DEBUG] 启用玩家操作');
+    
+    // 更新游戏状态
+    gameState.isMyTurn = true;
+    gameState.currentPlayer = state.currentPlayer;
+    
+    // 获取游戏操作按钮
+    const playBtn = document.getElementById('playBtn');
+    const passBtn = document.getElementById('passBtn');
+    const challengeBtn = document.getElementById('challengeBtn');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const declaredValueInput = document.getElementById('declaredValue');
+    
+    // 启用按钮
+    if (playBtn) playBtn.disabled = false;
+    if (passBtn) passBtn.disabled = false;
+    if (challengeBtn) challengeBtn.disabled = false;
+    if (selectAllBtn) selectAllBtn.disabled = false;
+    if (clearSelectionBtn) clearSelectionBtn.disabled = false;
+    if (declaredValueInput) declaredValueInput.disabled = false;
+    
+    // 添加高亮效果
+    if (playBtn) playBtn.classList.add('btn-primary');
+    if (passBtn) passBtn.classList.add('btn-primary');
+    if (challengeBtn) challengeBtn.classList.add('btn-danger');
+    
+    // 显示轮到您出牌的提示
+    showInfo('轮到您出牌了');
+}
+
+// 禁用玩家游戏操作
+function disablePlayerActions() {
+    console.log('[DEBUG] 禁用玩家操作');
+    
+    // 更新游戏状态
+    gameState.isMyTurn = false;
+    
+    // 获取游戏操作按钮
+    const playBtn = document.getElementById('playBtn');
+    const passBtn = document.getElementById('passBtn');
+    const challengeBtn = document.getElementById('challengeBtn');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const declaredValueInput = document.getElementById('declaredValue');
+    
+    // 禁用按钮
+    if (playBtn) playBtn.disabled = true;
+    if (passBtn) passBtn.disabled = true;
+    if (challengeBtn) challengeBtn.disabled = true;
+    if (selectAllBtn) selectAllBtn.disabled = true;
+    if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+    if (declaredValueInput) declaredValueInput.disabled = true;
+    
+    // 移除高亮效果
+    if (playBtn) playBtn.classList.remove('btn-primary');
+    if (passBtn) passBtn.classList.remove('btn-primary');
+    if (challengeBtn) challengeBtn.classList.remove('btn-danger');
+}
+
+// 添加初始化聊天输入框事件函数
+function initializeChatInput() {
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        // 添加回车键发送消息事件
+        chatInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // 聚焦时禁用其他键盘事件
+        chatInput.addEventListener('focus', function() {
+            gameState.chatInputFocused = true;
+        });
+        
+        // 失焦时启用其他键盘事件
+        chatInput.addEventListener('blur', function() {
+            gameState.chatInputFocused = false;
+        });
+        
+        console.log('[DEBUG] 聊天输入框事件初始化完成');
+    } else {
+        console.log('[DEBUG] 未找到聊天输入框元素');
+    }
+}
+
+function removeSpecificRobot(robotId) {
+    if (!gameState.isHost) return;
+
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+
+    // 发送移除特定机器人请求
+    stompClient.send("/app/game/robots/remove", {}, JSON.stringify({
+        roomId: gameState.roomId,
+        playerId: playerIdStr,
+        robotId: robotId
+    }));
+}
+
+function updatePlayers(players) {
+    const playerList = document.getElementById('playerList');
+    if (!playerList) return;
+    
+    playerList.innerHTML = '';
+    
+    if (!players || players.length === 0) {
+        playerList.innerHTML = '<div class="text-center p-3 text-light">暂无玩家</div>';
+        return;
+    }
+    
+    // 获取当前玩家ID
+    const currentPlayerData = JSON.parse(localStorage.getItem('player'));
+    const currentPlayerId = currentPlayerData ? currentPlayerData.id : '';
+    
+    players.forEach(player => {
+        const isCurrentPlayer = player.id === currentPlayerId;
+        // 识别机器人玩家（通过id前缀或type属性）
+        const isRobot = player.robot === true || player.type === 'ROBOT' || (player.id && player.id.startsWith('robot_'));
+        
+        let statusClass = 'status-waiting';
+        if (player.status === 'READY') {
+            statusClass = 'status-ready';
+        } else if (player.status === 'PLAYING') {
+            statusClass = 'status-playing';
+        } else if (player.status === 'OFFLINE') {
+            statusClass = 'status-offline';
+        }
+        
+        const playerElement = document.createElement('div');
+        playerElement.className = `player-item ${isCurrentPlayer ? 'current-player' : ''}`;
+        playerElement.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="player-name">${player.name || player.id}</span>
+                    ${isRobot ? '<span class="robot-badge">机器人</span>' : ''}
+                    ${isCurrentPlayer ? '<span class="badge bg-info ms-2">你</span>' : ''}
+                </div>
+                <span class="status-text ${statusClass}">${getPlayerStatusText(player.status)}</span>
+            </div>
+            <div class="player-cards mt-2">
+                ${renderPlayerCards(player)}
+            </div>
+        `;
+        playerList.appendChild(playerElement);
+    });
+    
+    console.log('[DEBUG] 已更新玩家列表，包含机器人');
+}
+
+function getPlayerStatusText(status) {
+    switch(status) {
+        case 'ONLINE': return '在线';
+        case 'READY': return '已准备';
+        case 'WAITING': return '等待中';
+        case 'PLAYING': return '游戏中';
+        case 'OFFLINE': return '离线';
+        default: return status;
+    }
+}
+
+// 渲染玩家手牌
+function renderPlayerCards(player) {
+    const currentPlayerData = JSON.parse(localStorage.getItem('player'));
+    const currentPlayerId = currentPlayerData ? currentPlayerData.id : '';
+    const isCurrentPlayer = player.id === currentPlayerId;
+    const isRobot = player.robot === true || player.type === 'ROBOT';
+    
+    // 如果没有牌，显示占位符
+    if (!player.cards || player.cards.length === 0) {
+        return `<div class="no-cards">暂无手牌</div>`;
+    }
+    
+    // 根据不同情况处理牌的显示
+    let cardsHtml = '';
+    
+    // 当前玩家显示实际牌面
+    if (isCurrentPlayer) {
+        player.cards.forEach(card => {
+            cardsHtml += `
+                <div class="card-item ${card.selected ? 'selected' : ''}" 
+                     data-card="${card.value}${card.suit}" 
+                     onclick="toggleCardSelection(this)">
+                    <div class="card-inner">
+                        <span class="card-value card-${card.suit}">${getCardDisplay(card)}</span>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        // 非当前玩家只显示牌背面
+        for (let i = 0; i < player.cards.length; i++) {
+            cardsHtml += `
+                <div class="card-item card-back">
+                    <div class="card-inner">
+                        <div class="back-pattern"></div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    return cardsHtml;
+}
+
+// 修复游戏页面加载时的房间进入逻辑
+function connectToGame() {
+    // 从URL获取房间ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get('roomId');
+    
+    if (!roomId) {
+        showError('无效的房间ID，将返回大厅');
+        setTimeout(() => {
+            window.location.href = '/lobby.html';
+        }, 2000);
+        return;
+    }
+    
+    // 获取玩家数据
+    const playerData = JSON.parse(localStorage.getItem('player'));
+    if (!playerData || !playerData.id) {
+        showError('请先登录');
+        setTimeout(() => {
+            window.location.href = '/login.html';
+        }, 2000);
+        return;
+    }
+    
+    // 检查玩家是否已在指定房间
+    if (playerData.roomId === roomId) {
+        // 已在该房间，直接连接WebSocket
+        connectWebSocket(roomId);
+    } else {
+        // 不在该房间，尝试加入
+        joinRoom(roomId, playerData.id);
+    }
+}
+
+// 加入房间
+function joinRoom(roomId, playerId) {
+    if (!roomId || !playerId) {
+        showError('房间ID或玩家ID无效');
+        return;
+    }
+    
+    showLoading('正在加入房间...');
+    
+    fetch(`/api/room/${roomId}/join`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ playerId: playerId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.error) {
+            // 检查是否是"玩家已在房间中"的错误
+            if (data.error.includes('已在房间') || data.error.includes('already in room')) {
+                // 已在房间中，可能是页面刷新，更新本地存储并连接
+                const playerData = JSON.parse(localStorage.getItem('player'));
+                playerData.roomId = roomId;
+                localStorage.setItem('player', JSON.stringify(playerData));
+                
+                // 连接WebSocket
+                connectWebSocket(roomId);
+            } else {
+                showError(data.error);
+                setTimeout(() => {
+                    window.location.href = '/lobby.html';
+                }, 2000);
+            }
+            return;
+        }
+        
+        // 成功加入房间，更新玩家数据
+        const playerData = JSON.parse(localStorage.getItem('player'));
+        playerData.roomId = roomId;
+        localStorage.setItem('player', JSON.stringify(playerData));
+        
+        // 连接WebSocket
+        connectWebSocket(roomId);
+    })
+    .catch(error => {
+        hideLoading();
+        showError('加入房间失败: ' + error.message);
+        console.error('加入房间失败:', error);
+        
+        setTimeout(() => {
+            window.location.href = '/lobby.html';
+        }, 2000);
+    });
+}
+
+// 处理房间最后一个玩家退出时的情况
+function leaveRoom() {
+    const playerData = JSON.parse(localStorage.getItem('player'));
+    if (!playerData || !playerData.roomId) {
+        window.location.href = '/lobby.html';
+        return;
+    }
+    
+    const roomId = playerData.roomId;
+    const playerId = playerData.id;
+    
+    showLoading('正在离开房间...');
+    
+    fetch(`/api/room/${roomId}/leave`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ playerId: playerId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        // 清除玩家房间信息
+        playerData.roomId = null;
+        localStorage.setItem('player', JSON.stringify(playerData));
+        
+        showSuccess('已离开房间');
+        setTimeout(() => {
+            window.location.href = '/lobby.html';
+        }, 1000);
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('离开房间失败:', error);
+        
+        // 即使出错也清除房间信息并返回大厅
+        playerData.roomId = null;
+        localStorage.setItem('player', JSON.stringify(playerData));
+        
+        window.location.href = '/lobby.html';
+    });
+}
+
+// 页面加载时执行
+window.onload = function() {
+    // 连接游戏
+    connectToGame();
+    
+    // 初始化各种监听器和UI元素
+    initializeChat();
+    initializeControls();
+};

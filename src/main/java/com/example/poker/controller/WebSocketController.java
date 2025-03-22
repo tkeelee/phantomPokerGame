@@ -43,90 +43,77 @@ public class WebSocketController {
     }
 
     @MessageMapping("/rooms/create")
-    public void createRoom(RoomRequest request) {
-        System.out.println("[DEBUG] 收到创建房间请求");
-        System.out.println("[DEBUG] 房主: " + request.getHostId());
-        System.out.println("[DEBUG] 房间名: " + request.getName());
-        System.out.println("[DEBUG] 最大玩家数: " + request.getMaxPlayers());
-        
-        // 检查玩家是否已在其他房间
-        for (RoomInfo existingRoom : rooms.values()) {
-            if (existingRoom.getPlayers().contains(request.getHostId())) {
-                System.out.println("[DEBUG] 创建房间失败 - 玩家已在其他房间中");
-                System.out.println("[DEBUG] 房间名: " + existingRoom.getName());
-                messagingTemplate.convertAndSendToUser(
-                    request.getHostId(),
-                    "/queue/createRoom",
-                    new JoinResponse(false, "您已在房间 '" + existingRoom.getName() + "' 中")
-                );
+    public void createRoom(CreateRoomRequest request) {
+        try {
+            System.out.println("[DEBUG] 收到创建房间请求");
+            System.out.println("[DEBUG] 房主ID: " + request.getHostId());
+            System.out.println("[DEBUG] 房间名称: " + request.getRoomName());
+            System.out.println("[DEBUG] 最大玩家数: " + request.getMaxPlayers());
+            
+            // 检查玩家是否已在其他房间
+            if (isPlayerInAnyRoom(request.getHostId())) {
+                System.out.println("[DEBUG] 玩家已在其他房间中");
+                
+                // 发送错误响应
+                JoinResponse response = new JoinResponse(false, "您已经在另一个房间中", null);
+                messagingTemplate.convertAndSendToUser(request.getHostId(), "/queue/joinRoom", response);
                 return;
             }
-        }
-
-        RoomInfo room = new RoomInfo();
-        room.setId(generateRoomId());
-        room.setName(request.getName());
-        room.setMaxPlayers(request.getMaxPlayers());
-        room.setHostId(request.getHostId());
-        room.setPlayerCount(1);
-        room.getPlayers().add(request.getHostId()); // 将房主添加到玩家列表
-
-        rooms.put(room.getId(), room);
-        System.out.println("[DEBUG] 房间创建成功");
-        System.out.println("[DEBUG] 房间ID: " + room.getId());
-        System.out.println("[DEBUG] 房间名: " + room.getName());
-        
-        // 同步房间信息到GameService
-        try {
-            System.out.println("[DEBUG] 同步房间信息到GameService");
-            gameService.createRoomWithId(room.getId(), request.getHostId(), request.getMaxPlayers(), room.getName());
-            System.out.println("[DEBUG] 房间同步成功");
-        } catch (Exception e) {
-            System.err.println("[ERROR] 同步房间到GameService失败: " + e.getMessage());
-            e.printStackTrace();
-        }
-        
-        // 更新玩家状态为游戏中
-        PlayerInfo player = onlinePlayers.get(request.getHostId());
-        if (player != null) {
-            player.setStatus("PLAYING");
-            System.out.println("[DEBUG] 更新玩家状态");
-            System.out.println("[DEBUG] 玩家: " + player.getName());
-            System.out.println("[DEBUG] 状态: PLAYING");
-            broadcastPlayerList();
-        }
-
-        // 发送成功响应给房主
-        JoinResponse response = new JoinResponse(true, "创建成功", room.getId());
-        System.out.println("[DEBUG] 发送创建成功响应");
-        System.out.println("[DEBUG] 房主: " + request.getHostId());
-        System.out.println("[DEBUG] 房间ID: " + room.getId());
-        
-        try {
-            // 尝试直接发送到用户队列
-            System.out.println("[DEBUG] 尝试发送到用户特定队列: /user/" + request.getHostId() + "/queue/createRoom");
-            messagingTemplate.convertAndSendToUser(
-                request.getHostId(),
-                "/queue/createRoom",
-                response
-            );
-            System.out.println("[DEBUG] 用户特定消息发送完成");
             
-            // 额外尝试使用广播方式，包含目标用户信息
-            System.out.println("[DEBUG] 广播额外消息包含用户信息");
-            Map<String, Object> broadcastMsg = new HashMap<>();
-            broadcastMsg.put("targetUser", request.getHostId());
-            broadcastMsg.put("roomId", room.getId());
-            broadcastMsg.put("action", "CREATE_ROOM_SUCCESS");
-            messagingTemplate.convertAndSend("/topic/system", broadcastMsg);
+            // 创建新房间
+            RoomInfo room = new RoomInfo();
+            room.setId("room_" + System.currentTimeMillis());
+            room.setName(request.getRoomName());
+            room.setMaxPlayers(request.getMaxPlayers());
+            room.setHostId(request.getHostId());
+            room.getPlayers().add(request.getHostId());
+            rooms.put(room.getId(), room);
+            
+            System.out.println("[DEBUG] 已创建房间");
+            System.out.println("[DEBUG] 房间ID: " + room.getId());
+            System.out.println("[DEBUG] 房间名称: " + room.getName());
+            
+            // 同步到GameService
+            try {
+                System.out.println("[DEBUG] 同步房间信息到GameService");
+                gameService.createRoomWithId(room.getId(), request.getHostId(), request.getMaxPlayers(), room.getName());
+                System.out.println("[DEBUG] 房间同步成功");
+            } catch (Exception e) {
+                System.err.println("[ERROR] 同步房间到GameService失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+            
+            // 更新玩家状态为游戏中
+            PlayerInfo player = onlinePlayers.get(request.getHostId());
+            if (player != null) {
+                player.setStatus("PLAYING");
+                System.out.println("[DEBUG] 更新玩家状态");
+                System.out.println("[DEBUG] 玩家: " + player.getName());
+                System.out.println("[DEBUG] 状态: PLAYING");
+                broadcastPlayerList();
+            }
+
+            // 发送成功响应给房主
+            JoinResponse response = new JoinResponse(true, "创建成功", room.getId());
+            System.out.println("[DEBUG] 发送创建成功响应");
+            System.out.println("[DEBUG] 房主: " + request.getHostId());
+            System.out.println("[DEBUG] 房间ID: " + room.getId());
+            messagingTemplate.convertAndSendToUser(request.getHostId(), "/queue/joinRoom", response);
+            
+            // 广播更新后的房间列表
+            broadcastRoomList();
+            
+            // 向管理页面广播更新的房间和玩家信息
+            notifyAdminUpdate();
+            
         } catch (Exception e) {
-            System.err.println("[ERROR] 发送用户特定消息时出错: " + e.getMessage());
+            System.err.println("[ERROR] 创建房间失败: " + e.getMessage());
             e.printStackTrace();
+            
+            // 发送错误响应
+            JoinResponse response = new JoinResponse(false, "创建房间失败: " + e.getMessage(), null);
+            messagingTemplate.convertAndSendToUser(request.getHostId(), "/queue/joinRoom", response);
         }
-        
-        // 广播房间列表更新
-        System.out.println("[DEBUG] 广播房间列表更新");
-        messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
     }
 
     @MessageMapping("/rooms/join")
@@ -197,6 +184,10 @@ public class WebSocketController {
             // 广播房间列表更新
             System.out.println("[DEBUG] 广播房间列表更新");
             messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
+
+            // 向管理页面广播更新的房间和玩家信息
+            notifyAdminUpdate();
+            
         } else {
             String errorMsg = targetRoom == null ? "房间不存在" : "房间已满";
             System.out.println("[DEBUG] 加入房间失败 - " + errorMsg);
@@ -251,7 +242,7 @@ public class WebSocketController {
             adminService.registerPlayer(adminPlayer);
             
             // 广播更新
-            messagingTemplate.convertAndSend("/topic/admin/players", adminService.getAllPlayers());
+            notifyAdminUpdate();
             log.info("已通知管理后台更新玩家列表 - 玩家: {}", player.getName());
         } catch (Exception e) {
             log.error("通知管理后台更新玩家列表失败: {}", e.getMessage());
@@ -286,12 +277,7 @@ public class WebSocketController {
         broadcastPlayerList();
         
         // 通知管理页面更新
-        try {
-            messagingTemplate.convertAndSend("/topic/admin/players", adminService.getAllPlayers());
-            messagingTemplate.convertAndSend("/topic/admin/rooms", adminService.getAllRooms());
-        } catch (Exception e) {
-            log.error("通知管理页面更新失败: {}", e.getMessage());
-        }
+        notifyAdminUpdate();
         
         // 向玩家发送需要重新登录的通知
         try {
@@ -349,10 +335,21 @@ public class WebSocketController {
         
         // 广播玩家列表更新
         broadcastPlayerList();
+
+        // 向管理页面广播更新的房间和玩家信息
+        notifyAdminUpdate();
     }
 
     private void broadcastPlayerList() {
         messagingTemplate.convertAndSend("/topic/players", new ArrayList<>(onlinePlayers.values()));
+    }
+
+    /**
+     * 获取在线玩家列表，用于广播
+     * @return 在线玩家列表
+     */
+    public List<PlayerInfo> getOnlinePlayersForBroadcast() {
+        return new ArrayList<>(onlinePlayers.values());
     }
 
     private String generateRoomId() {
@@ -397,14 +394,14 @@ public class WebSocketController {
         public void setStatus(String status) { this.status = status; }
     }
 
-    public static class RoomRequest {
-        private String name;
+    public static class CreateRoomRequest {
+        private String roomName;
         private int maxPlayers;
         private String hostId;
 
         // Getters and Setters
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
+        public String getRoomName() { return roomName; }
+        public void setRoomName(String roomName) { this.roomName = roomName; }
         public int getMaxPlayers() { return maxPlayers; }
         public void setMaxPlayers(int maxPlayers) { this.maxPlayers = maxPlayers; }
         public String getHostId() { return hostId; }
@@ -591,6 +588,10 @@ public class WebSocketController {
             
             // 广播玩家列表更新
             broadcastPlayerList();
+
+            // 向管理页面广播更新的房间和玩家信息
+            notifyAdminUpdate();
+            
         } catch (Exception e) {
             log.error("解散房间时发生错误: {}", e.getMessage(), e);
         }
@@ -603,5 +604,38 @@ public class WebSocketController {
         // Getters and Setters
         public String getRoomId() { return roomId; }
         public void setRoomId(String roomId) { this.roomId = roomId; }
+    }
+
+    // 添加广播房间列表方法
+    private void broadcastRoomList() {
+        try {
+            messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
+            System.out.println("[DEBUG] 广播房间列表更新成功");
+        } catch (Exception e) {
+            System.err.println("[ERROR] 广播房间列表失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // 检查玩家是否在任何房间中
+    private boolean isPlayerInAnyRoom(String playerId) {
+        for (RoomInfo room : rooms.values()) {
+            if (room.getPlayers().contains(playerId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 通知管理后台更新方法
+    private void notifyAdminUpdate() {
+        try {
+            messagingTemplate.convertAndSend("/topic/admin/rooms", adminService.getAllRooms());
+            messagingTemplate.convertAndSend("/topic/admin/players", adminService.getAllPlayers());
+            System.out.println("[DEBUG] 已向管理页面广播房间和玩家更新");
+        } catch (Exception e) {
+            System.err.println("[ERROR] 向管理页面广播更新失败: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 } 

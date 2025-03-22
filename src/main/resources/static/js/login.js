@@ -68,6 +68,118 @@ $(function() {
         }
     }
     
+    // 登录页面加载时检查踢出状态
+    document.addEventListener('DOMContentLoaded', function() {
+        // 检查URL参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const reason = urlParams.get('reason');
+        if (reason) {
+            document.getElementById('loginMessage').innerHTML = `<div class="alert alert-warning">${reason}</div>`;
+        }
+        
+        // 检查是否被踢出
+        checkKickedStatus();
+        
+        // 清理任何潜在的过期用户数据
+        cleanupUserData();
+    });
+
+    // 检查用户是否被踢出
+    function checkKickedStatus() {
+        const kickedOut = localStorage.getItem('kicked_out');
+        const kickedTime = localStorage.getItem('kicked_time');
+        const kickReason = localStorage.getItem('kicked_reason');
+        
+        if (kickedOut === 'true' && kickedTime) {
+            const now = Date.now();
+            const kickTime = parseInt(kickedTime);
+            const elapsedSeconds = (now - kickTime) / 1000;
+            
+            // 如果原因是封禁，显示不同的消息
+            const isBanned = kickReason === 'BAN' || kickReason === 'ADMIN_BAN';
+            const waitTimeMax = isBanned ? 300 : 30; // 封禁5分钟，普通踢出30秒
+            
+            // 如果被踢出后不到等待时间，禁止重新登录
+            if (elapsedSeconds < waitTimeMax) {
+                const waitTime = Math.ceil(waitTimeMax - elapsedSeconds);
+                const loginButton = document.getElementById('login-btn');
+                if (loginButton) {
+                    loginButton.disabled = true;
+                }
+                
+                // 显示不同的消息取决于踢出原因
+                let message = '';
+                if (isBanned) {
+                    message = `<div class="alert alert-danger">您的账号已被临时封禁，请等待 ${waitTime} 秒后再尝试登录</div>`;
+                } else {
+                    message = `<div class="alert alert-warning">您已被踢出游戏，请等待 ${waitTime} 秒后再尝试登录</div>`;
+                }
+                
+                // 添加消息显示区域
+                if (!document.getElementById('loginMessage')) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.id = 'loginMessage';
+                    document.querySelector('.login-form').prepend(messageDiv);
+                }
+                
+                document.getElementById('loginMessage').innerHTML = message;
+                
+                // 设置定时器定期更新等待时间
+                const waitInterval = setInterval(function() {
+                    const currentTime = Date.now();
+                    const newElapsed = (currentTime - kickTime) / 1000;
+                    const newWaitTime = Math.ceil(waitTimeMax - newElapsed);
+                    
+                    if (newWaitTime <= 0) {
+                        clearInterval(waitInterval);
+                        if (loginButton) {
+                            loginButton.disabled = false;
+                        }
+                        
+                        document.getElementById('loginMessage').innerHTML = 
+                            `<div class="alert alert-warning">您现在可以重新登录</div>`;
+                            
+                        // 清除踢出标记
+                        localStorage.removeItem('kicked_out');
+                        localStorage.removeItem('kicked_time');
+                        localStorage.removeItem('kicked_reason');
+                    } else {
+                        // 更新倒计时
+                        if (isBanned) {
+                            document.getElementById('loginMessage').innerHTML = 
+                                `<div class="alert alert-danger">您的账号已被临时封禁，请等待 ${newWaitTime} 秒后再尝试登录</div>`;
+                        } else {
+                            document.getElementById('loginMessage').innerHTML = 
+                                `<div class="alert alert-warning">您已被踢出游戏，请等待 ${newWaitTime} 秒后再尝试登录</div>`;
+                        }
+                    }
+                }, 1000);
+            } else {
+                // 超过等待时间，清除踢出标记
+                localStorage.removeItem('kicked_out');
+                localStorage.removeItem('kicked_time');
+                localStorage.removeItem('kicked_reason');
+            }
+        }
+    }
+
+    // 彻底清理用户数据
+    function cleanupUserData() {
+        // 清理任何可能导致问题的旧数据
+        localStorage.removeItem('player');
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentRoom');
+        localStorage.removeItem('readyPlayers');
+        
+        // 清除会话存储
+        sessionStorage.clear();
+        
+        // 清除任何游戏相关的缓存
+        if (typeof clearGameCache === 'function') {
+            clearGameCache();
+        }
+    }
+    
     // 登录验证
     function login() {
         var nickname = $('#nickname').val().trim();
@@ -115,6 +227,22 @@ $(function() {
             console.error('[DEBUG] 检查禁用状态出错:', error);
             // 出错时清除禁用信息
             sessionStorage.removeItem('banInfo');
+        }
+        
+        // 检查是否被踢出且仍在冷却期
+        const kickedOut = localStorage.getItem('kicked_out');
+        const kickedTime = localStorage.getItem('kicked_time');
+        if (kickedOut === 'true' && kickedTime) {
+            const now = Date.now();
+            const kickTime = parseInt(kickedTime);
+            const elapsedSeconds = (now - kickTime) / 1000;
+            
+            if (elapsedSeconds < 30) {
+                const waitTime = Math.ceil(30 - elapsedSeconds);
+                document.getElementById('loginMessage').innerHTML = 
+                    `<div class="alert alert-danger">请等待 ${waitTime} 秒后再尝试登录</div>`;
+                return;
+            }
         }
         
         try {

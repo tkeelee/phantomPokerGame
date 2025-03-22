@@ -382,11 +382,12 @@ public class AdminService {
     /**
      * 踢出玩家
      * <p>
-     * 将玩家从系统中踢出，流程包括：
+     * 踢出指定的玩家，流程包括：
      * 1. 如果玩家在房间中，先将其踢出房间
-     * 2. 从系统中移除玩家
-     * 3. 通知被踢出的玩家
-     * 4. 将玩家加入禁用名单（短期封禁）
+     * 2. 从缓存中移除玩家信息
+     * 3. 将玩家加入禁用名单
+     * 4. 通知玩家被踢出
+     * 5. 广播系统数据更新
      * </p>
      *
      * @param playerId 要踢出的玩家ID
@@ -406,6 +407,16 @@ public class AdminService {
         
         // 将玩家加入禁用名单（默认封禁5分钟）
         banPlayer(playerId, 5);
+        
+        // 确保从WebSocketController的在线玩家列表中移除
+        try {
+            // 通过WebSocket通知大厅更新玩家列表
+            // 先发送玩家离线消息，这会触发WebSocketController的playerOffline方法
+            messagingTemplate.convertAndSend("/app/players/offline", playerId);
+            log.info("已发送玩家离线通知以更新大厅玩家列表");
+        } catch (Exception e) {
+            log.error("发送玩家离线通知失败: {}", e.getMessage());
+        }
         
         // 通知玩家被踢出
         messagingTemplate.convertAndSendToUser(
@@ -480,6 +491,18 @@ public class AdminService {
         // 更新玩家状态
         player.setRoomId(null);
         player.setStatus("ONLINE");
+        
+        // 通知WebSocketController更新玩家状态
+        try {
+            // 发送玩家离开房间事件
+            messagingTemplate.convertAndSend("/app/rooms/leave", Map.of(
+                "roomId", roomId,
+                "playerId", playerId
+            ));
+            log.info("已发送玩家离开房间通知以更新大厅玩家列表");
+        } catch (Exception e) {
+            log.error("发送玩家离开房间通知失败: {}", e.getMessage());
+        }
         
         // 通知玩家被踢出房间
         messagingTemplate.convertAndSendToUser(

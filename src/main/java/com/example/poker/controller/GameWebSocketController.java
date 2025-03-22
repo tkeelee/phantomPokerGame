@@ -309,7 +309,7 @@ public class GameWebSocketController {
             logger.info("收到添加机器人请求 - 房间: {}, 数量: {}, 难度: {}", 
                     request.getRoomId(), request.getCount(), request.getDifficulty());
             
-            gameService.addRobotsToRoom(request.getRoomId(), request.getCount(), request.getDifficulty());
+            gameService.addRobotsToRoom(request.getRoomId(), request.getCount(), request.getDifficulty(), request.getPlayerId());
             
             // 发送游戏状态更新
             GameState state = gameService.getGameState(request.getRoomId());
@@ -342,7 +342,7 @@ public class GameWebSocketController {
         try {
             logger.info("收到移除机器人请求 - 房间: {}", request.getRoomId());
             
-            gameService.removeRobotsFromRoom(request.getRoomId());
+            gameService.removeRobotsFromRoom(request.getRoomId(), request.getPlayerId());
             
             // 发送游戏状态更新
             GameState state = gameService.getGameState(request.getRoomId());

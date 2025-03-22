@@ -2,6 +2,7 @@ package com.example.poker.service;
 
 import com.example.poker.model.GameState;
 import com.example.poker.model.Card;
+import com.example.poker.model.Player;
 import com.example.poker.constant.GameConstants;
 import com.example.poker.dto.GameStartDto;
 import org.slf4j.Logger;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Map;
 
 /**
  * WebSocket通信服务
@@ -150,5 +152,41 @@ public class WebSocketService {
         dto.setHostId(state.getHostId());
         dto.setGameStatus(state.getGameStatus());
         return dto;
+    }
+
+    /**
+     * 发送个人通知消息
+     * @param playerId 玩家ID
+     * @param notification 通知内容
+     */
+    public void sendNotification(String playerId, Map<String, Object> notification) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.warn("尝试向无效的玩家ID发送通知");
+            return;
+        }
+        
+        try {
+            messagingTemplate.convertAndSendToUser(
+                playerId,
+                "/queue/notifications",
+                notification
+            );
+            logger.debug("已向玩家 {} 发送通知", playerId);
+        } catch (Exception e) {
+            logger.error("向玩家 {} 发送通知失败: {}", playerId, e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 广播玩家状态更新
+     * @param players 玩家列表
+     */
+    public void broadcastPlayerStatusUpdate(List<Player> players) {
+        try {
+            messagingTemplate.convertAndSend("/topic/players", players);
+            logger.debug("已广播玩家状态更新，共 {} 个玩家", players.size());
+        } catch (Exception e) {
+            logger.error("广播玩家状态更新失败: {}", e.getMessage(), e);
+        }
     }
 } 

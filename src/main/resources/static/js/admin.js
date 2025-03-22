@@ -381,10 +381,44 @@ function confirmKickPlayer(playerId) {
     });
 }
 
+// 通过API踢出玩家（比WebSocket更可靠）
+function kickPlayerViaAPI(playerId, reason = null) {
+    if (!confirm(`确定要踢出玩家 ${playerId} 吗？`)) {
+        return;
+    }
+    
+    let url = `/admin/players/${playerId}/kick`;
+    if (reason) {
+        url += `?reason=${encodeURIComponent(reason)}`;
+    }
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            addLog(`成功踢出玩家: ${playerId}`, 'success');
+            // 刷新玩家列表
+            refreshPlayers();
+        } else {
+            addLog(`踢出玩家失败: ${data.error || '未知错误'}`, 'error');
+        }
+    })
+    .catch(error => {
+        addLog(`踢出玩家请求失败: ${error}`, 'error');
+        console.error('踢出玩家错误:', error);
+    });
+}
+
 // 踢出玩家
 function kickPlayer(playerId) {
     if (!stompClient || !stompClient.connected) {
-        addLog('WebSocket未连接，无法执行操作', 'error');
+        addLog('WebSocket未连接，无法执行操作，尝试通过API踢出', 'warning');
+        kickPlayerViaAPI(playerId);
         return;
     }
     
@@ -442,6 +476,14 @@ function setupEventListeners() {
             bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
         }
     });
+
+    // 添加刷新按钮事件处理
+    const refreshButton = document.getElementById('refreshData');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+            requestDataUpdate();
+        });
+    }
 }
 
 // 添加操作日志
@@ -490,4 +532,137 @@ function formatUptime(milliseconds) {
     } else {
         return `${seconds}秒`;
     }
+}
+
+// 手动请求刷新数据
+function requestDataUpdate() {
+    if (!stompClient || !stompClient.connected) {
+        addLog("无法请求数据更新：WebSocket未连接", 'error');
+        return;
+    }
+    
+    addLog("请求数据更新...", 'info');
+    
+    stompClient.send("/app/admin/data", {}, JSON.stringify({
+        timestamp: new Date().getTime()
+    }));
+}
+
+// 更新玩家列表
+function updatePlayerList(players) {
+    const playerListElem = $('#playerList');
+    playerListElem.empty();
+    
+    players.forEach(player => {
+        const row = $('<tr></tr>');
+        
+        // 玩家ID和名称
+        row.append(`<td>${player.id}</td>`);
+        row.append(`<td>${player.name || player.id}</td>`);
+        
+        // 在线状态
+        const activeStatus = player.active ? 
+            '<span class="badge bg-success">在线</span>' : 
+            '<span class="badge bg-secondary">离线</span>';
+        row.append(`<td>${activeStatus}</td>`);
+        
+        // 所在房间
+        row.append(`<td>${player.roomId || '-'}</td>`);
+        
+        // 玩家状态
+        let statusClass = 'bg-secondary';
+        if (player.status === 'PLAYING') statusClass = 'bg-primary';
+        if (player.status === 'READY') statusClass = 'bg-success';
+        if (player.status === 'WAITING') statusClass = 'bg-warning';
+        if (player.status === 'OFFLINE') statusClass = 'bg-dark';
+        
+        row.append(`<td><span class="badge ${statusClass}">${player.status || 'UNKNOWN'}</span></td>`);
+        
+        // 最后活跃时间
+        const lastActive = player.lastActiveTime ? new Date(player.lastActiveTime).toLocaleString() : '-';
+        row.append(`<td>${lastActive}</td>`);
+        
+        // 操作按钮
+        const actions = $('<td></td>');
+        
+        // 踢出按钮
+        if (player.active) {
+            const kickBtn = $(`<button class="btn btn-sm btn-warning me-1">
+                <i class="fas fa-user-slash me-1"></i>踢出
+            </button>`);
+            
+            // 绑定踢出玩家的事件
+            kickBtn.on('click', function() {
+                // 显示输入原因的对话框
+                layer.prompt({
+                    formType: 0,
+                    title: `请输入踢出玩家 ${player.id} 的原因`,
+                    btn: ['踢出', '取消']
+                }, function(value, index){
+                    layer.close(index);
+                    kickPlayerViaAPI(player.id, value); // 通过API踢出玩家
+                });
+            });
+            
+            actions.append(kickBtn);
+            
+            // 如果不在房间中，显示封禁按钮
+            if (!player.roomId) {
+                const banBtn = $(`<button class="btn btn-sm btn-danger">
+                    <i class="fas fa-ban me-1"></i>封禁
+                </button>`);
+                
+                // 绑定封禁玩家的事件
+                banBtn.on('click', function() {
+                    // 显示输入原因和时间的对话框
+                    layer.open({
+                        type: 1,
+                        title: `封禁玩家 ${player.id}`,
+                        area: ['350px', '220px'],
+                        content: `<div class="p-3">
+                            <div class="mb-2">
+                                <label class="form-label">封禁原因</label>
+                                <input type="text" class="form-control" id="banReason">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">封禁时间（分钟）</label>
+                                <input type="number" class="form-control" id="banDuration" value="30" min="5" max="1440">
+                            </div>
+                        </div>`,
+                        btn: ['封禁', '取消'],
+                        yes: function(index) {
+                            const reason = $('#banReason').val();
+                            const duration = $('#banDuration').val();
+                            layer.close(index);
+                            // 这里添加封禁玩家的实际代码
+                            addLog(`封禁玩家 ${player.id} ${duration} 分钟，原因: ${reason}`, 'warning');
+                        }
+                    });
+                });
+                
+                actions.append(banBtn);
+            }
+        } else {
+            // 如果玩家不在线，显示删除按钮
+            const deleteBtn = $(`<button class="btn btn-sm btn-secondary">
+                <i class="fas fa-trash-alt me-1"></i>删除
+            </button>`);
+            
+            deleteBtn.on('click', function() {
+                // 确认删除
+                if (confirm(`确定要从列表中删除离线玩家 ${player.id} 吗？`)) {
+                    // 这里添加删除玩家的实际代码
+                    addLog(`从列表中删除玩家 ${player.id}`, 'info');
+                }
+            });
+            
+            actions.append(deleteBtn);
+        }
+        
+        row.append(actions);
+        playerListElem.append(row);
+    });
+    
+    // 更新玩家计数
+    $('#playerCount').text(`${players.length}个玩家`);
 } 
