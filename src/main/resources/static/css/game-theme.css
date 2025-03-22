@@ -12,12 +12,15 @@
     --light-blue: #3a4a6b;
     --lighter-blue: #4a5d82;
     --new-light-blue: #2c4779; /* 新的浅蓝色主题 */
-    --new-lighter-blue: #3d5a94; /* 更亮的浅蓝色 */
+    --new-lighter-blue: #014866; /* 更亮的浅蓝色 */
     --text-light: #e9ecef;
     --text-dark: #212529;
     --text-muted: #adb5bd;
     --accent-blue: #4dabf7;
     --border-color: rgba(80, 120, 200, 0.4);
+    --game-area-bg: #014866;      /* 主要游戏区域背景色 */
+    --info-area-bg: #0488c8;      /* 信息区域背景色 */
+    --title-bar-bg: #227fba;      /* 标题栏背景色 */
 }
 
 /* 重置游戏背景 */
@@ -70,6 +73,10 @@ body {
     margin: 15px 0;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    height: 100vh;
 }
 
 /* 游戏标题 */
@@ -493,4 +500,186 @@ h3, h4, h5, .section-header h2 {
         margin-right: 0 !important;
         margin-bottom: 8px;
     }
-} 
+}
+
+/* 添加新的布局样式 */
+/* 主要内容区域布局 */
+.main-content {
+    display: grid;
+    grid-template-columns: 70% 15% 15%;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex: 1;
+}
+
+/* 底部内容区域布局 */
+.bottom-content {
+    display: grid;
+    grid-template-columns: 85% 15%;
+    gap: 15px;
+    min-height: 200px;
+}
+
+/* 区域背景颜色 */
+.game-play-zone, .game-hand, .game-history-section,
+.current-pile-section,
+.card-pile-section {
+    background-color: var(--game-area-bg);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.player-list-card, .player-rank-card, .chat-card, .game-controls,
+.player-actions {
+    background-color: var(--info-area-bg);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+/* 标题栏样式 */
+h3, .section-title {
+    background-color: var(--title-bar-bg);
+    color: white;
+    padding: 10px 15px;
+    margin: -15px -15px 15px -15px;
+    border-radius: 8px 8px 0 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* 保持原有的响应式布局 */
+@media (max-width: 992px) {
+    .main-content, .bottom-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 文字颜色统一为白色 */
+.player-name,
+.room-info,
+.game-status,
+.history-item,
+.chat-message,
+.card-count,
+.player-status {
+    color: white;
+}
+
+/* 游戏区内部布局优化 */
+.card-pile-section {
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.history-list {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.history-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+}
+
+/* 玩家列表样式优化 */
+.player-item {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-item.current-player {
+    background: rgba(255, 255, 255, 0.2);
+    border-left: 3px solid white;
+}
+
+/* 输入框和按钮样式优化 */
+.form-control,
+.form-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.btn {
+    background: var(--title-bar-bg);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* 主要游戏区域统一背景色 #014866 */
+.game-play-zone,
+.current-pile-section,
+.card-pile-section,
+.game-hand,
+.game-history-section {
+    background-color: #014866;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    color: white;
+}
+
+/* 信息区域统一背景色 #0488c8 */
+.player-list-card,
+.player-rank-card,
+.chat-card,
+.game-controls {
+    background-color: #0488c8;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    color: white;
+}
+
+/* 所有标题栏统一背景色 #227fba 和白色文字 */
+h3,
+.section-title,
+.player-list-card > h3,
+.player-rank-card > h3,
+.chat-card > h3,
+.game-controls > h3,
+.game-play-zone h3,
+.game-hand h3,
+.game-history-section h3 {
+    background-color: #227fba;
+    color: white;
+    padding: 10px 15px;
+    margin: -15px -15px 15px -15px;
+    border-radius: 8px 8px 0 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* 确保所有信息文字为白色 */
+.player-name,
+.room-info,
+.game-status,
+.history-item,
+.chat-message,
+.card-count,
+.player-status,
+.player-item,
+.history-list,
+.last-claim,
+.game-info {
+    color: white;
+}
