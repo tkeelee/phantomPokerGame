@@ -2006,7 +2006,7 @@ function joinRoom(roomId, playerId) {
     
     showLoading('正在加入房间...');
     
-    fetch(`/api/room/${roomId}/join`, {
+    fetch(`/api/game/room/${roomId}/join`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -2068,7 +2068,7 @@ function leaveRoom() {
     
     showLoading('正在离开房间...');
     
-    fetch(`/api/room/${roomId}/leave`, {
+    fetch(`/api/game/room/${roomId}/leave`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -2100,6 +2100,34 @@ function leaveRoom() {
     });
 }
 
+// 初始化聊天功能
+function initializeChat() {
+    console.log('[DEBUG] 初始化聊天功能');
+    
+    // 初始化聊天输入框
+    initializeChatInput();
+    
+    // 初始化聊天区域
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) {
+        // 清空聊天区域
+        chatContainer.innerHTML = '';
+        
+        // 添加欢迎消息
+        const welcomeMessage = {
+            player: '系统',
+            content: '欢迎来到游戏房间，请文明聊天！',
+            timestamp: new Date().toISOString(),
+            isSelf: false
+        };
+        addChatMessage(welcomeMessage);
+        
+        console.log('[DEBUG] 聊天区域初始化完成');
+    } else {
+        console.log('[DEBUG] 未找到聊天区域元素');
+    }
+}
+
 // 页面加载时执行
 window.onload = function() {
     // 连接游戏
@@ -2109,3 +2137,74 @@ window.onload = function() {
     initializeChat();
     initializeControls();
 };
+
+/**
+ * 初始化游戏控制按钮和事件监听器
+ */
+function initializeControls() {
+    console.log('[DEBUG] 初始化游戏控制按钮');
+    
+    // 初始化准备按钮
+    const readyBtn = document.getElementById('readyBtn');
+    if (readyBtn) {
+        readyBtn.addEventListener('click', function() {
+            toggleReady();
+            playSound('clickSound');
+        });
+        console.log('[DEBUG] 准备按钮事件初始化完成');
+    } else {
+        console.log('[DEBUG] 未找到准备按钮元素');
+    }
+    
+    // 初始化开始游戏按钮
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) {
+        startBtn.addEventListener('click', function() {
+            startGame();
+            playSound('clickSound');
+        });
+        console.log('[DEBUG] 开始游戏按钮事件初始化完成');
+    } else {
+        console.log('[DEBUG] 未找到开始游戏按钮元素');
+    }
+    
+    // 初始化离开房间按钮
+    const leaveBtn = document.getElementById('leaveBtn');
+    if (leaveBtn) {
+        leaveBtn.addEventListener('click', function() {
+            leaveRoom();
+            playSound('clickSound');
+        });
+        console.log('[DEBUG] 离开房间按钮事件初始化完成');
+    } else {
+        console.log('[DEBUG] 未找到离开房间按钮元素');
+    }
+    
+    // 初始化添加机器人按钮
+    const addRobotsBtn = document.getElementById('addRobotsBtn');
+    if (addRobotsBtn) {
+        addRobotsBtn.addEventListener('click', function() {
+            addRobots();
+            playSound('clickSound');
+        });
+        console.log('[DEBUG] 添加机器人按钮事件初始化完成');
+    }
+    
+    // 初始化移除机器人按钮
+    const removeRobotsBtn = document.getElementById('removeRobotsBtn');
+    if (removeRobotsBtn) {
+        removeRobotsBtn.addEventListener('click', function() {
+            removeRobots();
+            playSound('clickSound');
+        });
+        console.log('[DEBUG] 移除机器人按钮事件初始化完成');
+    }
+    
+    // 初始化游戏操作按钮（出牌、过牌、质疑）
+    // 这些按钮在HTML中已经设置了onclick属性，不需要在这里添加事件监听器
+    
+    // 初始化声音控制
+    initializeSound();
+    
+    console.log('[DEBUG] 游戏控制按钮初始化完成');
+}

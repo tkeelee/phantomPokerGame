@@ -206,6 +206,7 @@ public class GameWebSocketController {
         notification.setType("JOIN");
         notification.setPlayerId(message.getPlayerId());
         notification.setContent("玩家 " + message.getPlayerId() + " 加入了房间");
+        notification.setRoomId(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
     }
     
@@ -384,4 +385,4 @@ public class GameWebSocketController {
         public String getDifficulty() { return difficulty; }
         public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
     }
-} 
+}
