@@ -13,12 +13,15 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * WebSocket配置类
  * 用于配置WebSocket连接和消息代理
  */
 @Configuration
 @EnableWebSocketMessageBroker
+@Slf4j
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
@@ -49,28 +52,28 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String username = accessor.getFirstNativeHeader("login");
                     if (username != null) {
-                        System.out.println("[DEBUG] 用户连接 - 用户名: " + username);
-                        System.out.println("[DEBUG] 所有头信息: " + accessor.toString());
+                        log.info("用户连接 - 用户名: " + username);
+                        log.info("所有头信息: " + accessor.toString());
                         accessor.setUser(() -> username);
                     } else {
-                        System.out.println("[WARN] 用户连接但未提供用户名");
-                        System.out.println("[DEBUG] 连接头信息: " + accessor.toString());
+                        log.error("用户连接但未提供用户名");
+                        log.error("连接头信息: " + accessor.toString());
                     }
                 } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                     // 记录订阅信息
                     String destination = accessor.getDestination();
-                    System.out.println("[DEBUG] 用户订阅 - 目标: " + destination);
+                    log.info("用户订阅 - 目标: " + destination);
                     if (accessor.getUser() != null) {
-                        System.out.println("[DEBUG] 订阅用户: " + accessor.getUser().getName());
+                        log.info("订阅用户: " + accessor.getUser().getName());
                     } else {
-                        System.out.println("[WARN] 无法识别订阅用户");
+                        log.error("无法识别订阅用户");
                     }
                 } else if (StompCommand.SEND.equals(accessor.getCommand())) {
                     // 记录发送消息信息
                     String destination = accessor.getDestination();
-                    System.out.println("[DEBUG] 用户发送消息 - 目标: " + destination);
+                    log.info("用户发送消息 - 目标: " + destination);
                     if (accessor.getUser() != null) {
-                        System.out.println("[DEBUG] 发送用户: " + accessor.getUser().getName());
+                        log.info("发送用户: " + accessor.getUser().getName());
                     }
                 }
                 

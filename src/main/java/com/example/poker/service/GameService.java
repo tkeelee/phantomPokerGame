@@ -70,11 +70,11 @@ public class GameService {
      * @return 创建的房间
      */
     public GameRoom createRoomWithId(String roomId, String hostId, int maxPlayers, String roomName) {
-        System.out.println("[DEBUG] 使用指定ID创建房间: " + roomId);
+        log.info("使用指定ID创建房间: " + roomId);
         
         // 检查房间是否已存在
         if (rooms.containsKey(roomId)) {
-            System.out.println("[DEBUG] 房间已存在，返回现有房间: " + roomId);
+            log.info("房间已存在，返回现有房间: " + roomId);
             return rooms.get(roomId);
         }
         
@@ -101,8 +101,8 @@ public class GameService {
         rooms.put(roomId, room);
         gameStates.put(roomId, state);
         
-        System.out.println("[DEBUG] 成功创建指定ID的房间: " + roomId);
-        System.out.println("[DEBUG] 当前所有房间: " + rooms.keySet());
+        log.info("成功创建指定ID的房间: " + roomId);
+        log.info("当前所有房间: " + rooms.keySet());
         
         return room;
     }
@@ -114,15 +114,15 @@ public class GameService {
      * @return 加入的房间
      */
     public GameRoom joinRoom(String roomId, String playerId) {
-        System.out.println("[DEBUG] 尝试加入房间, roomId: " + roomId + ", playerId: " + playerId);
+        log.info("尝试加入房间, roomId: " + roomId + ", playerId: " + playerId);
         GameRoom room = rooms.get(roomId);
         if (room == null) {
-            System.out.println("[ERROR] 房间不存在: " + roomId);
-            System.out.println("[DEBUG] 当前存在的房间: " + rooms.keySet());
+            log.error("房间不存在: " + roomId);
+            log.info("当前存在的房间: " + rooms.keySet());
             throw new GameException("房间不存在：" + roomId, "ROOM_NOT_FOUND");
         }
         
-        System.out.println("[DEBUG] 找到房间, 状态: " + room.getStatus() + ", 玩家: " + room.getPlayers() + ", 最大人数: " + room.getMaxPlayers());
+        log.info("找到房间, 状态: " + room.getStatus() + ", 玩家: " + room.getPlayers() + ", 最大人数: " + room.getMaxPlayers());
         
         if (room.getStatus() != GameStatus.WAITING) {
             throw new GameException("游戏已开始，无法加入", "GAME_ALREADY_STARTED");
@@ -133,7 +133,7 @@ public class GameService {
         
         // 添加玩家到房间
         if (!room.getPlayers().contains(playerId)) {
-            System.out.println("[DEBUG] 添加玩家到房间: " + playerId);
+            log.info("添加玩家到房间: " + playerId);
             room.addPlayer(playerId);
             
             // 更新游戏状态
@@ -145,7 +145,7 @@ public class GameService {
             // 发送状态更新
             sendGameStateUpdate(roomId);
         } else {
-            System.out.println("[DEBUG] 玩家已在房间中: " + playerId);
+            log.info("玩家已在房间中: " + playerId);
         }
         return room;
     }
@@ -163,7 +163,7 @@ public class GameService {
         GameRoom room = getRoom(roomId);
         if (room == null) {
             // 房间不存在，可能已经被解散
-            log.info("玩家 {} 尝试离开不存在的房间 {}", playerId, roomId);
+            log.error("玩家 {} 尝试离开不存在的房间 {}", playerId, roomId);
             return;
         }
         
@@ -888,7 +888,7 @@ public class GameService {
             }
         } catch (Exception e) {
             // 处理其他异常，记录错误并让下一个玩家继续
-            System.err.println("机器人回合处理出错: " + e.getMessage());
+            log.error("机器人回合处理出错: " + e.getMessage());
             e.printStackTrace();
             String nextPlayerId = room.getNextPlayerId();
             if (nextPlayerId != null) {

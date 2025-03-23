@@ -6,8 +6,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Date;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 @Data
+@Slf4j
 public class GameState {
     private String roomId;  // 房间ID
     private String hostId;  // 房主ID
@@ -227,7 +229,7 @@ public class GameState {
     public void penalizePlayer(String playerId) {
         // 扣除玩家积分逻辑
         // 实际扣分规则需要根据游戏规则实现
-        System.out.println("玩家 " + playerId + " 受到处罚");
+        log.info("玩家 " + playerId + " 受到处罚");
     }
 
     public boolean containsPlayer(String playerId) {

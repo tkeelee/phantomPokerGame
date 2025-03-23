@@ -684,3 +684,17 @@ function updatePlayerList(players) {
     // 更新玩家计数
     $('#playerCount').text(`${players.length}个玩家`);
 } 
+// 添加解除操作的点击事件
+function handleUnbanPlayer() {
+    const playerId = prompt('请输入要解除禁用的玩家ID:');
+    if (playerId) {
+        // 调用后台接口
+        stompClient.send("/app/admin/unban-player", {}, JSON.stringify({ playerId }));
+        addLog(`已请求解除玩家 ${playerId} 的禁用`, 'info');
+    }
+}
+// 假设在某个按钮上添加点击事件
+const unbanButton = document.getElementById('unbanButton');
+if (unbanButton) {
+    unbanButton.addEventListener('click', handleUnbanPlayer);
+}

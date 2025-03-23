@@ -298,7 +298,7 @@ $(function() {
                 sessionStorage.clear();
             }
             
-            console.log('[DEBUG] 清除用户数据成功');
+            console.debug('清除用户数据成功');
         } catch (error) {
             console.error('[DEBUG] 清除用户数据失败:', error);
         }

@@ -117,6 +117,30 @@
                         </table>
                     </div>
                 </div>
+                <!-- 新增黑名单玩家列表 -->
+                <div class="player-list-header d-flex justify-content-between align-items-center">
+                    <h5>
+                        <i class="fas fa-ban me-2"></i>黑名单玩家列表
+                    </h5>
+                    <span id="blacklistPlayerCount" class="badge bg-danger">0个玩家</span>
+                </div>
+                <div class="table-container">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>玩家ID</th>
+                                    <th>昵称</th>
+                                    <th>加入黑名单时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="blacklistPlayerList">
+                                <!-- 黑名单玩家列表将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- 系统信息标签页 -->
@@ -209,3 +233,57 @@
     <script src="js/admin.js"></script>
 </body>
 </html> 
+// 在js/admin.js中添加更新黑名单列表的逻辑
+// 系统启动时更新黑名单列表
+$(document).ready(function() {
+    updateBlacklistPlayerList();
+});
+
+// 玩家加入黑名单时更新黑名单列表
+function addPlayerToBlacklist(playerId) {
+    // 发送请求将玩家加入黑名单
+    $.ajax({
+        url: '/addPlayerToBlacklist',
+        method: 'POST',
+        data: { playerId: playerId },
+        success: function() {
+            updateBlacklistPlayerList();
+        }
+    });
+}
+
+// 更新黑名单玩家列表
+function updateBlacklistPlayerList() {
+    $.ajax({
+        url: '/getBlacklistPlayers',
+        method: 'GET',
+        success: function(data) {
+            var blacklistPlayerList = $('#blacklistPlayerList');
+            blacklistPlayerList.empty();
+            $.each(data, function(index, player) {
+                var row = $('<tr>');
+                row.append($('<td>').text(player.id));
+                row.append($('<td>').text(player.nickname));
+                row.append($('<td>').text(player.addedTime));
+                var removeButton = $('<button>').addClass('btn btn-primary').text('解除').click(function() {
+                    removePlayerFromBlacklist(player.id);
+                });
+                row.append($('<td>').append(removeButton));
+                blacklistPlayerList.append(row);
+            });
+            $('#blacklistPlayerCount').text(data.length + '个玩家');
+        }
+    });
+}
+
+// 从黑名单移除玩家
+function removePlayerFromBlacklist(playerId) {
+    $.ajax({
+        url: '/removePlayerFromBlacklist',
+        method: 'POST',
+        data: { playerId: playerId },
+        success: function() {
+            updateBlacklistPlayerList();
+        }
+    });
+}

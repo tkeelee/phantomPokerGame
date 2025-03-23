@@ -153,6 +153,18 @@ public class AdminController {
         }
     }
 
+    @PostMapping("/admin/unban-player")
+    public ResponseEntity<String> unbanPlayer(@RequestParam String playerId) {
+        try {
+            adminService.unbanPlayer(playerId);
+            log.info("管理员已解除玩家{}的黑名单状态", playerId);
+            return ResponseEntity.ok("玩家解封成功");
+        } catch (Exception e) {
+            log.error("解封玩家{}失败: {}", playerId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
+    }
+    
     /**
      * 请求管理员数据
      */

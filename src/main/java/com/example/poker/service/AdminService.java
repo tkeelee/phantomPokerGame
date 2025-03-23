@@ -405,8 +405,8 @@ public class AdminService {
         // 移除玩家
         removePlayer(playerId);
         
-        // 将玩家加入禁用名单（默认封禁5分钟）
-        banPlayer(playerId, 5);
+        // 将玩家加入禁用名单（默认封禁10秒）
+        banPlayer(playerId, 10);
         
         // 确保从WebSocketController的在线玩家列表中移除
         try {
@@ -547,10 +547,10 @@ public class AdminService {
      * 将玩家加入黑名单
      * 
      * @param playerId 玩家ID
-     * @param minutes 禁用时长（分钟）
+     * @param seconds 禁用时长（秒）
      */
-    public void banPlayer(String playerId, int minutes) {
-        Instant banUntil = Instant.now().plusSeconds(minutes * 60);
+    public void banPlayer(String playerId, int seconds) {
+        Instant banUntil = Instant.now().plusSeconds(seconds);
         bannedPlayers.put(playerId, banUntil);
         log.info("玩家 {} 已被加入黑名单，禁用至: {}", playerId, banUntil);
         

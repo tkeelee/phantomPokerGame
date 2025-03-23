@@ -47,15 +47,15 @@ function hideLoading() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('[DEBUG] 游戏页面初始化开始');
-    console.log('[DEBUG] 当前URL:', window.location.href);
+    console.debug('游戏页面初始化开始');
+    console.debug('当前URL:', window.location.href);
     
     // 初始化聊天输入框事件
     initializeChatInput();
     
     // 检查是否被禁用
     if (checkBanStatus()) {
-        console.log('[DEBUG] 检测到用户被禁用，无法进入游戏');
+        console.debug('检测到用户被禁用，无法进入游戏');
         return;
     }
     
@@ -74,15 +74,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         currentPlayer = playerData;
-        console.log('[DEBUG] 当前玩家信息:', currentPlayer);
+        console.debug('当前玩家信息:', currentPlayer);
 
         // 获取房间ID（优先使用URL参数）
         const urlParams = new URLSearchParams(window.location.search);
         currentRoomId = urlParams.get('roomId') || localStorage.getItem('currentRoomId');
         
-        console.log('[DEBUG] URL参数中的房间ID:', urlParams.get('roomId'));
-        console.log('[DEBUG] localStorage中的房间ID:', localStorage.getItem('currentRoomId'));
-        console.log('[DEBUG] 最终使用的房间ID:', currentRoomId);
+        console.debug('URL参数中的房间ID:', urlParams.get('roomId'));
+        console.debug('localStorage中的房间ID:', localStorage.getItem('currentRoomId'));
+        console.debug('最终使用的房间ID:', currentRoomId);
         
         if (!currentRoomId) {
             console.error('[DEBUG] 房间ID无效');
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function connectWebSocket() {
     try {
-        console.log('[DEBUG] 开始WebSocket连接过程');
+        console.debug('开始WebSocket连接过程');
         const socket = new SockJS('/ws');
         stompClient = Stomp.over(socket);
         
@@ -139,13 +139,13 @@ function connectWebSocket() {
             // 确保使用正确的玩家ID
             
             // 订阅游戏状态更新
-            console.log('[DEBUG] 订阅游戏状态更新');
-            console.log('[DEBUG] 状态主题:', '/topic/game/state/' + currentRoomId);
+            console.debug('订阅游戏状态更新');
+            console.debug('状态主题:', '/topic/game/state/' + currentRoomId);
             stompClient.subscribe('/topic/game/state/' + currentRoomId, function(message) {
                 try {
-                    console.log('[DEBUG] 收到游戏状态更新原始数据:', message.body);
+                    console.debug('收到游戏状态更新原始数据:', message.body);
                     const state = JSON.parse(message.body);
-                    console.log('[DEBUG] 解析后的游戏状态:', state);
+                    console.debug('解析后的游戏状态:', state);
                     handleGameState(state);
                 } catch (error) {
                     console.error('[DEBUG] 解析游戏状态失败:', error);
@@ -154,13 +154,13 @@ function connectWebSocket() {
             });
 
             // 订阅游戏通知
-            console.log('[DEBUG] 订阅游戏通知');
-            console.log('[DEBUG] 通知主题:', '/topic/game/notification/' + currentRoomId);
+            console.debug('订阅游戏通知');
+            console.debug('通知主题:', '/topic/game/notification/' + currentRoomId);
             stompClient.subscribe('/topic/game/notification/' + currentRoomId, function(message) {
                 try {
-                    console.log('[DEBUG] 收到游戏通知原始数据:', message.body);
+                    console.debug('收到游戏通知原始数据:', message.body);
                     const notification = JSON.parse(message.body);
-                    console.log('[DEBUG] 解析后的游戏通知:', notification);
+                    console.debug('解析后的游戏通知:', notification);
                     showGameNotification(notification);
                 } catch (error) {
                     console.error('[DEBUG] 解析游戏通知失败:', error);
@@ -169,13 +169,13 @@ function connectWebSocket() {
             });
 
             // 订阅聊天消息
-            console.log('[DEBUG] 订阅聊天消息');
-            console.log('[DEBUG] 聊天主题:', '/topic/game/chat/' + currentRoomId);
+            console.debug('订阅聊天消息');
+            console.debug('聊天主题:', '/topic/game/chat/' + currentRoomId);
             stompClient.subscribe('/topic/game/chat/' + currentRoomId, function(message) {
                 try {
-                    console.log('[DEBUG] 收到聊天消息原始数据:', message.body);
+                    console.debug('收到聊天消息原始数据:', message.body);
                     const chatMessage = JSON.parse(message.body);
-                    console.log('[DEBUG] 解析后的聊天消息:', chatMessage);
+                    console.debug('解析后的聊天消息:', chatMessage);
                     
                     // 如果不是自己发送的消息，则显示（自己的消息在发送时就已显示）
                     const senderID = typeof chatMessage.playerId === 'object' ? 
@@ -200,12 +200,12 @@ function connectWebSocket() {
             });
 
             // 订阅个人通知消息
-            console.log('[DEBUG] 订阅个人通知消息');
+            console.debug('订阅个人通知消息');
             stompClient.subscribe('/user/queue/notifications', function(message) {
                 try {
-                    console.log('[DEBUG] 收到个人通知原始数据:', message.body);
+                    console.debug('收到个人通知原始数据:', message.body);
                     const notification = JSON.parse(message.body);
-                    console.log('[DEBUG] 解析后的个人通知:', notification);
+                    console.debug('解析后的个人通知:', notification);
                     
                     // 处理强制登出消息
                     if (notification.type === 'FORCE_LOGOUT') {
@@ -224,10 +224,10 @@ function connectWebSocket() {
             });
 
             // 订阅加入房间响应
-            console.log('[DEBUG] 订阅加入房间响应');
+            console.debug('订阅加入房间响应');
             stompClient.subscribe('/user/queue/joinRoom', function(message) {
                 try {
-                    console.log('[DEBUG] 收到加入房间响应原始数据:', message.body);
+                    console.debug('收到加入房间响应原始数据:', message.body);
                     const response = JSON.parse(message.body);
                     handleJoinRoomResponse(response);
                 } catch (error) {
@@ -237,10 +237,10 @@ function connectWebSocket() {
             });
 
             // 订阅个人错误消息
-            console.log('[DEBUG] 订阅个人错误消息');
+            console.debug('订阅个人错误消息');
             stompClient.subscribe('/user/queue/errors', function(message) {
                 try {
-                    console.log('[DEBUG] 收到错误消息原始数据:', message.body);
+                    console.debug('收到错误消息原始数据:', message.body);
                     const response = JSON.parse(message.body);
                     console.error('[DEBUG] 解析后的错误消息:', response);
                     showError(response.message);
@@ -250,7 +250,7 @@ function connectWebSocket() {
                 }
             });
 
-            console.log('[DEBUG] 所有订阅设置完成，开始尝试加入房间');
+            console.debug('所有订阅设置完成，开始尝试加入房间');
             // 尝试加入房间
             tryJoinRoom(3);
         }, function(error) {
@@ -316,10 +316,10 @@ function tryJoinRoom(attempts) {
         
         // 更新当前使用的房间ID
         currentRoomId = roomIdToUse;
-        console.log('[DEBUG] 使用房间ID:', currentRoomId);
+        console.debug('使用房间ID:', currentRoomId);
 
         // 记录请求详情用于调试
-        console.log('[DEBUG] 发送加入房间请求:', {
+        console.debug('发送加入房间请求:', {
             type: "JOIN",
             roomId: currentRoomId,
             playerId: playerId
@@ -336,15 +336,15 @@ function tryJoinRoom(attempts) {
         setTimeout(() => {
             // 如果还没有收到状态更新，重试
             if (!gameState.roomId) {
-                console.log('[DEBUG] 未收到房间状态，重试加入');
+                console.debug('未收到房间状态，重试加入');
                 tryJoinRoom(attempts - 1);
             } else {
                 // 确保如果收到房间状态但没有调用hideLoading，这里强制隐藏加载提示
                 hideLoading();
-                console.log('[DEBUG] 收到房间状态，房间ID:', gameState.roomId);
+                console.debug('收到房间状态，房间ID:', gameState.roomId);
                 // 确保currentRoomId和gameState.roomId一致
                 if (currentRoomId !== gameState.roomId) {
-                    console.log('[DEBUG] 更新currentRoomId:', gameState.roomId);
+                    console.debug('更新currentRoomId:', gameState.roomId);
                     currentRoomId = gameState.roomId;
                 }
             }
@@ -383,7 +383,7 @@ function announcePlayerJoined() {
             timestamp: new Date().getTime()
         };
         
-        console.log('[DEBUG] 发送玩家加入通知:', joinNotification);
+        console.debug('发送玩家加入通知:', joinNotification);
         
         // 发送消息到特定主题
         stompClient.send(`/app/game/notification/${roomId}`, {}, JSON.stringify(joinNotification));
@@ -394,23 +394,23 @@ function announcePlayerJoined() {
 
 // 在handleJoinRoomResponse函数中调用公告函数
 function handleJoinRoomResponse(response) {
-    console.log('[DEBUG] 收到加入房间响应:', response);
+    console.debug('收到加入房间响应:', response);
     
     if (response.success) {
-        console.log('[DEBUG] 成功加入房间');
+        console.debug('成功加入房间');
         hideLoading();
         showSuccess('成功加入房间');
         
         // 确保保存房间ID
         if (response.roomId) {
-            console.log('[DEBUG] 从响应中获取房间ID:', response.roomId);
+            console.debug('从响应中获取房间ID:', response.roomId);
             currentRoomId = response.roomId;
             gameState.roomId = response.roomId;
             
             // 保存到localStorage，便于页面刷新后恢复
             localStorage.setItem('currentRoomId', response.roomId);
         } else if (currentRoomId) {
-            console.log('[DEBUG] 使用当前房间ID:', currentRoomId);
+            console.debug('使用当前房间ID:', currentRoomId);
             // 确保gameState中也有roomId
             gameState.roomId = currentRoomId;
         } else {
@@ -440,7 +440,7 @@ function handleJoinRoomResponse(response) {
 
 function handleGameState(state) {
     // 保存当前状态
-    console.log('[DEBUG] 处理游戏状态更新:', state);
+    console.debug('处理游戏状态更新:', state);
     
     // 确保 gameState 初始化
     if (!gameState) {
@@ -465,7 +465,7 @@ function handleGameState(state) {
         currentRoomId = state.roomId;
     } else if (currentRoomId && !gameState.roomId) {
         // 如果状态更新中没有roomId但currentRoomId存在，使用currentRoomId
-        console.log('[DEBUG] 状态中没有roomId，使用当前roomId:', currentRoomId);
+        console.debug('状态中没有roomId，使用当前roomId:', currentRoomId);
         gameState.roomId = currentRoomId;
         state.roomId = currentRoomId; // 确保state也有正确的roomId以供后续处理
     }
@@ -476,7 +476,7 @@ function handleGameState(state) {
     
     // 更新最大玩家数
     if (state.maxPlayers) {
-        console.log('[DEBUG] 从服务器更新最大玩家数:', state.maxPlayers);
+        console.debug('从服务器更新最大玩家数:', state.maxPlayers);
         gameState.maxPlayers = state.maxPlayers;
     } else if (!gameState.maxPlayers) {
         gameState.maxPlayers = 4; // 设置默认值
@@ -599,13 +599,13 @@ function showGameNotification(notification) {
     if (notification.type === 'JOIN') {
         // 如果通知中的roomId为null但currentRoomId存在，使用当前房间ID
         if (!notification.roomId && currentRoomId) {
-            console.log('[DEBUG] 通知中的roomId为null，使用当前房间ID:', currentRoomId);
+            console.debug('通知中的roomId为null，使用当前房间ID:', currentRoomId);
             notification.roomId = currentRoomId;
         }
         
         // 如果有玩家加入，更新房间玩家信息
         if (notification.playerId && notification.success) {
-            console.log('[DEBUG] 玩家加入房间成功:', notification.playerId);
+            console.debug('玩家加入房间成功:', notification.playerId);
             
             // 确保gameState有players数组
             if (!gameState.players) {
@@ -623,7 +623,7 @@ function showGameNotification(notification) {
             
             // 如果玩家不在列表中，添加到玩家列表
             if (!playerExists) {
-                console.log('[DEBUG] 添加新玩家到列表:', notification.playerId);
+                console.debug('添加新玩家到列表:', notification.playerId);
                 gameState.players.push(notification.playerId);
                 
                 // 更新玩家列表UI
@@ -1069,7 +1069,7 @@ function sendMessage() {
     
     if (message) {
         try {
-            console.log('[DEBUG] 准备发送聊天消息:', message);
+            console.debug('准备发送聊天消息:', message);
             
             // 获取当前玩家信息
             const playerData = typeof currentPlayer === 'object' ? 
@@ -1112,7 +1112,7 @@ function sendMessage() {
             // 清空输入框
             input.value = '';
             
-            console.log('[DEBUG] 聊天消息已发送');
+            console.debug('聊天消息已发送');
         } catch (error) {
             console.error('[DEBUG] 发送聊天消息时出错:', error);
             showError('发送消息失败');
@@ -1128,7 +1128,7 @@ function addChatMessage(message) {
     }
     
     try {
-        console.log('[DEBUG] 添加聊天消息:', message);
+        console.debug('添加聊天消息:', message);
         
         // 获取当前时间
         const now = new Date();
@@ -1157,7 +1157,7 @@ function addChatMessage(message) {
         // 自动滚动到底部
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        console.log('[DEBUG] 聊天消息已添加到DOM');
+        console.debug('聊天消息已添加到DOM');
     } catch (error) {
         console.error('[DEBUG] 添加聊天消息时出错:', error);
     }
@@ -1440,7 +1440,7 @@ function checkConnectionStatus() {
         }
         
         // 尝试重新连接
-        console.log('[DEBUG] 尝试重新连接WebSocket...');
+        console.debug('尝试重新连接WebSocket...');
         showWarning('正在尝试重新连接...');
         connectWebSocket();
     }
@@ -1448,7 +1448,7 @@ function checkConnectionStatus() {
 
 // 处理强制登出消息
 function handleForceLogout(notification) {
-    console.log('[DEBUG] 收到强制登出通知:', notification);
+    console.debug('收到强制登出通知:', notification);
     
     // 显示被踢出的消息
     const reason = notification.reason || '违反规则';
@@ -1475,7 +1475,7 @@ function handleForceLogout(notification) {
         if (window.indexedDB) {
             const request = window.indexedDB.deleteDatabase('gameCache');
             request.onsuccess = function() {
-                console.log('[DEBUG] 游戏缓存已成功删除');
+                console.debug('游戏缓存已成功删除');
             };
             request.onerror = function() {
                 console.error('[DEBUG] 无法删除游戏缓存');
@@ -1497,7 +1497,7 @@ function handleForceLogout(notification) {
     // 断开WebSocket连接
     if (stompClient && stompClient.connected) {
         stompClient.disconnect();
-        console.log('[DEBUG] WebSocket连接已断开');
+        console.debug('WebSocket连接已断开');
     }
     
     // 设置踢出标志和时间
@@ -1513,7 +1513,7 @@ function handleForceLogout(notification) {
 
 // 处理强制离开房间通知
 function handleForceRoomExit(notification) {
-    console.log('[DEBUG] 收到强制离开房间通知:', notification);
+    console.debug('收到强制离开房间通知:', notification);
     
     // 显示消息
     showWarning(notification.message || '房间已解散，您将返回大厅');
@@ -1524,7 +1524,7 @@ function handleForceRoomExit(notification) {
     // 断开连接，然后返回大厅
     if (stompClient && stompClient.connected) {
         stompClient.disconnect(function() {
-            console.log('[DEBUG] WebSocket连接已断开，返回大厅');
+            console.debug('WebSocket连接已断开，返回大厅');
             setTimeout(() => {
                 window.location.href = 'lobby.html';
             }, 1500);
@@ -1543,7 +1543,7 @@ function updateUI(state) {
         return;
     }
     
-    console.log('[DEBUG] 更新UI:', state);
+    console.debug('更新UI:', state);
     
     try {
         // 更新房间信息
@@ -1552,7 +1552,7 @@ function updateUI(state) {
             const players = state.players || [];
             // 优先使用state中的maxPlayers，其次是gameState中的，最后默认为4
             const maxPlayers = state.maxPlayers || gameState.maxPlayers || 4;
-            console.log('[DEBUG] 显示房间信息 - 当前人数/最大人数:', players.length, '/', maxPlayers);
+            console.debug('显示房间信息 - 当前人数/最大人数:', players.length, '/', maxPlayers);
             roomInfoElement.textContent = `房间: ${state.roomName || gameState.roomName || '游戏房间'} (${players.length}/${maxPlayers})`;
         }
         
@@ -1698,7 +1698,7 @@ function updateLastClaim(claim) {
         lastClaimElement.style.display = 'none';
     }
     
-    console.log('[DEBUG] 更新最后声明:', claim);
+    console.debug('更新最后声明:', claim);
 }
 
 // 更新手牌和可用操作
@@ -1734,7 +1734,7 @@ function updateHandAndActions(state) {
         // 显示轮到您出牌的提示
         showInfo('轮到您出牌了');
     } else {
-        console.log('[DEBUG] 没有找到手牌数据或手牌为空');
+        console.debug('没有找到手牌数据或手牌为空');
     }
     
     // 更新游戏操作区可见性
@@ -1746,7 +1746,7 @@ function updateHandAndActions(state) {
 
 // 启用玩家游戏操作
 function enablePlayerActions(state) {
-    console.log('[DEBUG] 启用玩家操作');
+    console.debug('启用玩家操作');
     
     // 更新游戏状态
     gameState.isMyTurn = true;
@@ -1779,7 +1779,7 @@ function enablePlayerActions(state) {
 
 // 禁用玩家游戏操作
 function disablePlayerActions() {
-    console.log('[DEBUG] 禁用玩家操作');
+    console.debug('禁用玩家操作');
     
     // 更新游戏状态
     gameState.isMyTurn = false;
@@ -1828,9 +1828,9 @@ function initializeChatInput() {
             gameState.chatInputFocused = false;
         });
         
-        console.log('[DEBUG] 聊天输入框事件初始化完成');
+        console.debug('聊天输入框事件初始化完成');
     } else {
-        console.log('[DEBUG] 未找到聊天输入框元素');
+        console.debug('未找到聊天输入框元素');
     }
 }
 
@@ -1895,7 +1895,7 @@ function updatePlayers(players) {
         playerList.appendChild(playerElement);
     });
     
-    console.log('[DEBUG] 已更新玩家列表，包含机器人');
+    console.debug('已更新玩家列表，包含机器人');
 }
 
 function getPlayerStatusText(status) {
@@ -2092,7 +2092,7 @@ function leaveRoom() {
 
 // 初始化聊天功能
 function initializeChat() {
-    console.log('[DEBUG] 初始化聊天功能');
+    console.debug('初始化聊天功能');
     
     // 初始化聊天输入框
     initializeChatInput();
@@ -2112,9 +2112,9 @@ function initializeChat() {
         };
         addChatMessage(welcomeMessage);
         
-        console.log('[DEBUG] 聊天区域初始化完成');
+        console.debug('聊天区域初始化完成');
     } else {
-        console.log('[DEBUG] 未找到聊天区域元素');
+        console.debug('未找到聊天区域元素');
     }
 }
 
@@ -2132,7 +2132,7 @@ window.onload = function() {
  * 初始化游戏控制按钮和事件监听器
  */
 function initializeControls() {
-    console.log('[DEBUG] 初始化游戏控制按钮');
+    console.debug('初始化游戏控制按钮');
     
     // 初始化准备按钮
     const readyBtn = document.getElementById('readyBtn');
@@ -2141,9 +2141,9 @@ function initializeControls() {
             toggleReady();
             playSound('clickSound');
         });
-        console.log('[DEBUG] 准备按钮事件初始化完成');
+        console.debug('准备按钮事件初始化完成');
     } else {
-        console.log('[DEBUG] 未找到准备按钮元素');
+        console.debug('未找到准备按钮元素');
     }
     
     // 初始化开始游戏按钮
@@ -2153,9 +2153,9 @@ function initializeControls() {
             startGame();
             playSound('clickSound');
         });
-        console.log('[DEBUG] 开始游戏按钮事件初始化完成');
+        console.debug('开始游戏按钮事件初始化完成');
     } else {
-        console.log('[DEBUG] 未找到开始游戏按钮元素');
+        console.debug('未找到开始游戏按钮元素');
     }
     
     // 初始化离开房间按钮
@@ -2165,9 +2165,9 @@ function initializeControls() {
             leaveRoom();
             playSound('clickSound');
         });
-        console.log('[DEBUG] 离开房间按钮事件初始化完成');
+        console.debug('离开房间按钮事件初始化完成');
     } else {
-        console.log('[DEBUG] 未找到离开房间按钮元素');
+        console.debug('未找到离开房间按钮元素');
     }
     
     // 初始化添加机器人按钮
@@ -2177,7 +2177,7 @@ function initializeControls() {
             addRobots();
             playSound('clickSound');
         });
-        console.log('[DEBUG] 添加机器人按钮事件初始化完成');
+        console.debug('添加机器人按钮事件初始化完成');
     }
     
     // 初始化移除机器人按钮
@@ -2187,7 +2187,7 @@ function initializeControls() {
             removeRobots();
             playSound('clickSound');
         });
-        console.log('[DEBUG] 移除机器人按钮事件初始化完成');
+        console.debug('移除机器人按钮事件初始化完成');
     }
     
     // 初始化游戏操作按钮（出牌、过牌、质疑）
@@ -2196,5 +2196,5 @@ function initializeControls() {
     // 初始化声音控制
     initializeSound();
     
-    console.log('[DEBUG] 游戏控制按钮初始化完成');
+    console.debug('游戏控制按钮初始化完成');
 }
