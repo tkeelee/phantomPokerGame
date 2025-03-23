@@ -3,650 +3,322 @@ let stompClient = null;
 let currentPlayer = null;
 let connectionAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 3;
+let currentRoom = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-    // 清理游戏缓存
-    clearGameCache();
-    
-    // 检查是否被禁用
-    if (checkBanStatus()) {
-        console.debug('检测到用户被禁用，无法进入大厅');
+// 页面加载完成后初始化
+$(document).ready(function() {
+    // 检查登录状态
+    const playerData = JSON.parse(localStorage.getItem('player'));
+    if (!playerData || !playerData.id) {
+        window.location.href = 'login.html';
         return;
     }
-    
-    // 检查是否已登录
-    try {
-        const playerData = JSON.parse(localStorage.getItem('player'));
-        if (!playerData || !playerData.id) {
-            console.error('[DEBUG] 未找到有效的玩家信息');
-            window.location.href = 'index.html';
-            return;
+
+    // 设置玩家名称
+    currentPlayer = playerData.id;
+    $('#playerName').text(playerData.name || playerData.id);
+
+    // 连接WebSocket
+    connectWebSocket();
+
+    // 绑定聊天输入框事件
+    $('#chatInput').keypress(function(e) {
+        if (e.which == 13) {
+            sendMessage();
         }
-
-        currentPlayer = playerData.id;
-        
-        // 显示玩家名称
-        document.getElementById('playerName').textContent = playerData.name || playerData.id;
-
-        // 连接WebSocket
-        connectWebSocket();
-    } catch (error) {
-        console.error('[DEBUG] 加载玩家信息失败:', error);
-        window.location.href = 'index.html';
-        return;
-    }
+    });
 });
 
+// 连接WebSocket
 function connectWebSocket() {
     try {
-        console.debug('正在连接WebSocket...');
-        
-        // 直接使用SockJS，它会自动处理协议
         const socket = new SockJS('/ws');
         stompClient = Stomp.over(socket);
-        
-        // 禁用STOMP调试日志，减少控制台输出
-        stompClient.debug = null;
+        stompClient.debug = null; // 禁用debug日志
 
-        // 从localStorage获取完整的玩家信息
-        const playerData = JSON.parse(localStorage.getItem('player'));
-        if (!playerData) {
-            console.error('[DEBUG] 未找到玩家信息');
-            window.location.href = 'index.html';
-            return;
-        }
-        
-        currentPlayer = playerData.id;
-        
-        // 配置STOMP客户端
         const connectHeaders = {
             login: currentPlayer
         };
-
-        console.debug('开始连接，玩家:', currentPlayer);
 
         stompClient.connect(connectHeaders, 
             function(frame) {
                 console.debug('WebSocket连接成功');
                 connectionAttempts = 0;
-                
-                // 隐藏加载提示
-                hideLoading();
-                
-                // 显示连接成功提示
-                showSuccess('连接成功！');
-
-                // 设置所有订阅
                 setupSubscriptions();
-
-                // 先请求玩家列表更新
-                requestPlayerListUpdate();
-
-                // 再发送玩家在线状态
-                setTimeout(() => {
-                    sendPlayerOnlineStatus();
-                }, 300);
-                
-                // 加载房间列表
                 loadRoomList();
-            }, 
+            },
             function(error) {
-                console.error('[DEBUG] WebSocket连接失败:', error);
+                console.error('WebSocket连接失败:', error);
                 handleConnectionError();
             }
         );
     } catch (error) {
-        console.error('[DEBUG] WebSocket连接错误:', error);
+        console.error('WebSocket连接错误:', error);
         handleConnectionError();
     }
 }
 
-// 设置所有WebSocket订阅
+// 处理连接错误
+function handleConnectionError() {
+    connectionAttempts++;
+    if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
+        console.debug(`尝试重新连接 (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        setTimeout(connectWebSocket, 2000);
+    } else {
+        showError('无法连接到服务器，请刷新页面重试');
+    }
+}
+
+// 设置WebSocket订阅
 function setupSubscriptions() {
     if (!stompClient || !stompClient.connected) {
-        console.error('[DEBUG] 无法设置订阅：WebSocket未连接');
+        console.error('WebSocket未连接，无法设置订阅');
         return;
     }
 
-    console.debug('开始设置订阅');
-    console.debug('当前玩家:', currentPlayer);
-    
-    // 订阅创建房间响应
-    console.debug('准备订阅创建房间响应，路径: /user/queue/createRoom');
-    const createRoomSub = stompClient.subscribe('/user/queue/createRoom', function(message) {
-        console.debug('进入createRoom消息处理函数');
-        console.debug('原始消息:', message);
-        
-        try {
-            console.debug('收到创建房间响应原始数据:', message.body);
-            const response = JSON.parse(message.body);
-            console.debug('解析后的创建房间响应:', response);
-            
-            // 隐藏加载提示
-            hideLoading();
-            
-            if (response.success) {
-                console.debug('创建房间成功，准备跳转');
-                console.debug('房间ID:', response.roomId);
-                
-                // 保存房间ID到localStorage
-                localStorage.setItem('currentRoomId', response.roomId);
-                console.debug('已保存房间ID到localStorage:', response.roomId);
-                
-                // 显示成功提示
-                showSuccess('房间创建成功！');
-                
-                // 添加延迟确保消息显示后再跳转
-                setTimeout(function() {
-                    // 立即跳转到游戏页面
-                    const gameUrl = `game.html?roomId=${response.roomId}`;
-                    console.debug('即将跳转到:', gameUrl);
-                    window.location.href = gameUrl;
-                }, 500);
-            } else {
-                console.warn('[DEBUG] 创建房间失败:', response.message);
-                showError(response.message || '创建房间失败');
-            }
-        } catch (error) {
-            console.error('[DEBUG] 处理createRoom消息时发生错误:', error);
-            console.error('[DEBUG] 错误堆栈:', error.stack);
-            hideLoading();
-            showError('创建房间失败');
-        }
-    });
-    console.debug('创建房间响应订阅ID:', createRoomSub.id);
-
-    // 订阅系统广播消息 - 接收包括用户特定消息的备份广播
-    stompClient.subscribe('/topic/system', function(message) {
-        try {
-            console.debug('收到系统广播消息:', message.body);
-            const systemMsg = JSON.parse(message.body);
-            
-            // 检查是否是针对当前用户的消息
-            if (systemMsg.targetUser === currentPlayer) {
-                console.debug('收到针对当前用户的系统消息:', systemMsg);
-                
-                // 处理创建房间成功的备份通知
-                if (systemMsg.action === 'CREATE_ROOM_SUCCESS') {
-                    console.debug('收到创建房间成功的备份通知');
-                    const roomId = systemMsg.roomId;
-                    
-                    // 检查是否已经处理过这个房间ID
-                    if (!localStorage.getItem('currentRoomId')) {
-                        console.debug('通过备份通知处理房间创建成功');
-                        
-                        // 保存房间ID到localStorage
-                        localStorage.setItem('currentRoomId', roomId);
-                        console.debug('通过备份通知保存房间ID:', roomId);
-                        
-                        // 显示成功提示
-                        showSuccess('房间创建成功！');
-                        
-                        // 添加延迟确保消息显示后再跳转
-                        setTimeout(function() {
-                            // 立即跳转到游戏页面
-                            const gameUrl = `game.html?roomId=${roomId}`;
-                            console.debug('通过备份通知跳转到:', gameUrl);
-                            window.location.href = gameUrl;
-                        }, 500);
-                    } else {
-                        console.debug('已经处理过该房间创建响应，忽略备份通知');
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('[DEBUG] 处理系统广播消息时出错:', error);
-        }
-    });
-    
-    // 订阅加入房间响应 - 修改订阅路径
-    stompClient.subscribe('/user/queue/joinRoom', function(message) {
-        console.debug('进入joinRoom消息处理函数');
-        try {
-            console.debug('收到加入房间响应原始数据:', message.body);
-            const response = JSON.parse(message.body);
-            console.debug('解析后的加入房间响应:', response);
-            
-            // 清除加入超时
-            clearJoinTimeout();
-            
-            // 隐藏加载提示
-            hideLoading();
-            
-            if (response.success) {
-                console.debug('加入房间成功，准备跳转');
-                console.debug('房间ID:', response.roomId);
-                
-                // 保存房间ID到localStorage
-                localStorage.setItem('currentRoomId', response.roomId);
-                console.debug('已保存房间ID到localStorage');
-                
-                // 显示成功提示
-                showSuccess('成功加入房间！');
-                
-                // 立即跳转到游戏页面
-                const gameUrl = `game.html?roomId=${response.roomId}`;
-                console.debug('即将跳转到:', gameUrl);
-                window.location.href = gameUrl;
-            } else {
-                console.warn('[DEBUG] 加入房间失败:', response.message);
-                showError(response.message || '加入房间失败');
-            }
-        } catch (error) {
-            console.error('[DEBUG] 处理joinRoom消息时发生错误:', error);
-            console.error('[DEBUG] 错误堆栈:', error.stack);
-            hideLoading();
-            showError('加入房间失败');
-        }
-    });
-    
     // 订阅房间列表更新
     stompClient.subscribe('/topic/rooms', function(message) {
-        console.debug('收到房间列表更新');
         updateRoomList(JSON.parse(message.body));
     });
-    
-    // 订阅在线玩家更新
+
+    // 订阅玩家列表更新
     stompClient.subscribe('/topic/players', function(message) {
-        try {
-            const players = JSON.parse(message.body);
-            updatePlayerList(players);
-        } catch (error) {
-            console.error('解析玩家列表失败:', error);
-        }
+        updatePlayerList(JSON.parse(message.body));
     });
 
-    // 订阅个人错误消息
-    stompClient.subscribe('/user/queue/errors', function(message) {
-        try {
-            const response = JSON.parse(message.body);
-            showError(response.message);
-        } catch (error) {
-            console.error('解析错误消息失败:', error);
-        }
-    });
-    
-    // 订阅用户通知消息
-    stompClient.subscribe('/user/queue/notifications', function(message) {
-        try {
-            const notification = JSON.parse(message.body);
-            console.debug('收到用户通知:', notification);
-            
-            // 处理不同类型的通知
-            if (notification.type === 'ROOM_LEFT') {
-                showSuccess(notification.message || '已离开房间');
-                // 请求更新房间列表
-                loadRoomList();
-            } else if (notification.type === 'roomDissolved' || notification.type === 'FORCE_ROOM_EXIT') {
-                showWarning(notification.message || '房间已解散');
-                // 请求更新房间列表
-                loadRoomList();
-            } else if (notification.type === 'FORCE_LOGOUT') {
-                // 处理强制登出消息
-                handleForceLogout(notification);
-            }
-        } catch (error) {
-            console.error('[DEBUG] 处理用户通知出错:', error);
-        }
+    // 订阅系统消息
+    stompClient.subscribe('/topic/system', function(message) {
+        handleSystemMessage(JSON.parse(message.body));
     });
 
-    console.debug('订阅设置完成');
+    // 订阅聊天消息
+    stompClient.subscribe('/topic/chat', function(message) {
+        displayChatMessage(JSON.parse(message.body));
+    });
+
+    // 订阅个人消息
+    stompClient.subscribe('/user/queue/private', function(message) {
+        handlePrivateMessage(JSON.parse(message.body));
+    });
 }
 
+// 加载房间列表
 function loadRoomList() {
-    if (stompClient && stompClient.connected) {
-        // 确保发送玩家ID为字符串
-        const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
-        
-        stompClient.send("/app/rooms/list", {}, JSON.stringify({
-            playerId: playerIdStr
-        }));
-    } else {
+    if (!stompClient || !stompClient.connected) {
         console.error('WebSocket未连接');
-        showError('未连接到服务器，请刷新页面重试');
+        return;
     }
+    stompClient.send("/app/rooms/list", {}, {});
 }
 
+// 更新房间列表
 function updateRoomList(rooms) {
-    const roomList = document.getElementById('roomList');
-    if (!roomList) return;
+    const roomList = $('#roomList');
+    roomList.empty();
 
-    roomList.innerHTML = '';
-
-    if (rooms.length === 0) {
-        roomList.innerHTML = `
-            <div class="text-center p-4">
-                <p class="text-light">暂无房间，点击"创建房间"开始游戏</p>
-            </div>
-        `;
+    if (!rooms || rooms.length === 0) {
+        roomList.html('<div class="text-center text-light p-3">暂无房间</div>');
         return;
     }
 
     rooms.forEach(room => {
-        // 确保玩家数量不为负数或零（当房间应该解散时）
-        const playerCount = Math.max(room.playerCount || 0, 0);
-        // 保证robotCount不为负
-        const robotCount = Math.max(room.robotCount || 0, 0);
-        // 计算真实人类玩家数
-        const humanCount = Math.max(playerCount - robotCount, 0);
-        
-        // 如果房间人数为0，不显示该房间（应该已被解散）
-        if (playerCount === 0) {
-            return;
-        }
-        
-        const roomElement = document.createElement('div');
-        roomElement.className = 'room-item';
-        
-        // 设置状态标签颜色
-        const statusClass = room.status === "WAITING" ? "bg-info" : 
-                            room.status === "PLAYING" ? "bg-warning" : "bg-secondary";
-        
-        // 设置人数标签颜色
-        const playerCountClass = playerCount >= room.maxPlayers ? "text-danger" : 
-                                playerCount >= room.maxPlayers / 2 ? "text-warning" : "text-success";
-        
-        roomElement.innerHTML = `
-            <div class="room-info">
-                <h5 class="mb-1">${room.name}</h5>
-                <div class="d-flex align-items-center flex-wrap">
-                    <span class="badge ${statusClass} me-2">${getStatusText(room.status)}</span>
-                    <small class="${playerCountClass} me-2">玩家: ${humanCount}</small>
-                    ${robotCount > 0 ? `<small class="text-info me-2">机器人: ${robotCount}</small>` : ''}
-                    <small class="${playerCountClass}">总数: ${playerCount}/${room.maxPlayers}</small>
-                    <small class="ms-2 text-light opacity-75">房主: ${room.hostName || '未知'}</small>
+        if (room.status !== 'PLAYING') {
+            const roomElement = $(`
+                <div class="room-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="text-light mb-1">房间 ${room.id}</h5>
+                            <small class="text-light">
+                                玩家数: ${room.players.length}/${room.maxPlayers}
+                                ${room.hasRobots ? ' (包含机器人)' : ''}
+                            </small>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="joinRoom('${room.id}')">
+                            加入房间
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <button onclick="joinRoom('${room.id}')" class="btn ${room.status === 'WAITING' ? 'btn-primary' : 'btn-secondary'}" 
-                ${room.status !== 'WAITING' || playerCount >= room.maxPlayers ? 'disabled' : ''}>
-                ${room.status === 'WAITING' && playerCount < room.maxPlayers ? '加入房间' : '已满/游戏中'}
-            </button>
-        `;
-        roomList.appendChild(roomElement);
+            `);
+            roomList.append(roomElement);
+        }
     });
-    
-    console.debug('已更新房间列表');
 }
 
-// 获取房间状态文本
-function getStatusText(status) {
-    switch(status) {
-        case 'WAITING': return '<span class="status-text status-waiting">等待中</span>';
-        case 'PLAYING': return '<span class="status-text status-playing">游戏中</span>';
-        case 'FINISHED': return '<span class="status-text">已结束</span>';
-        default: return '<span class="status-text">未知状态</span>';
-    }
-}
-
+// 更新玩家列表
 function updatePlayerList(players) {
-    const playerList = document.getElementById('playerList');
-    if (!playerList) return;
+    const playerList = $('#playerList');
+    playerList.empty();
 
-    playerList.innerHTML = '';
-
-    if (!players || !Array.isArray(players) || players.length === 0) {
-        playerList.innerHTML = '<div class="text-center p-3 text-light">暂无在线玩家</div>';
+    if (!players || players.length === 0) {
+        playerList.html('<div class="text-center text-light p-3">暂无玩家</div>');
         return;
     }
 
-    // 获取当前玩家ID
-    const currentPlayerData = JSON.parse(localStorage.getItem('player'));
-    const currentPlayerId = currentPlayerData ? currentPlayerData.id : '';
-
-    // 遍历所有玩家，包括机器人
     players.forEach(player => {
-        const isCurrentPlayer = player.id === currentPlayerId;
-        // 识别机器人玩家（通过id前缀或type属性）
-        const isRobot = player.robot === true || player.type === 'ROBOT' || (player.id && player.id.startsWith('robot_'));
-        
-        let statusHtml;
-        if (player.status === 'ONLINE') {
-            statusHtml = '<span class="status-text status-ready">在线</span>';
-        } else if (player.status === 'PLAYING') {
-            statusHtml = '<span class="status-text status-playing">游戏中</span>';
-        } else if (player.status === 'READY') {
-            statusHtml = '<span class="status-text status-ready">已准备</span>';
-        } else if (player.status === 'WAITING') {
-            statusHtml = '<span class="status-text status-waiting">等待中</span>';
-        } else if (player.status === 'OFFLINE') {
-            statusHtml = '<span class="status-text status-offline">离线</span>';
-        } else {
-            statusHtml = '<span class="status-text">' + player.status + '</span>';
-        }
-        
-        const playerElement = document.createElement('div');
-        playerElement.className = `player-item ${isCurrentPlayer ? 'current-player' : ''}`;
-        playerElement.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="player-name">${player.name || player.id}</span>
-                    ${isRobot ? '<span class="robot-badge">机器人</span>' : ''}
-                    ${isCurrentPlayer ? '<span class="badge bg-info ms-2">你</span>' : ''}
+        const isCurrentPlayer = player.id === currentPlayer;
+        const playerElement = $(`
+            <div class="player-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-light">${player.name || player.id}</span>
+                    ${isCurrentPlayer ? '<span class="badge bg-info ms-2">我</span>' : ''}
                 </div>
-                <span class="badge">${statusHtml}</span>
             </div>
-        `;
-        playerList.appendChild(playerElement);
+        `);
+        playerList.append(playerElement);
     });
-    
-    console.debug('已更新玩家列表，包含机器人');
 }
 
-// 获取玩家状态文本
-function getPlayerStatusText(status) {
-    switch(status) {
-        case 'ONLINE': return '<span class="status-text status-ready">在线</span>';
-        case 'PLAYING': return '<span class="status-text status-playing">游戏中</span>';
-        case 'READY': return '<span class="status-text status-ready">已准备</span>';
-        case 'WAITING': return '<span class="status-text status-waiting">等待中</span>';
-        case 'OFFLINE': return '<span class="status-text status-offline">离线</span>';
-        default: return '<span class="status-text">' + status + '</span>';
+// 创建房间
+function createRoom() {
+    if (!stompClient || !stompClient.connected) {
+        showError('未连接到服务器');
+        return;
     }
+
+    stompClient.send("/app/rooms/create", {}, JSON.stringify({
+        hostId: currentPlayer,
+        maxPlayers: 6 // 默认6人房
+    }));
 }
 
-function sendCreateRoomRequest() {
-    // 获取房间信息
-    const roomName = document.getElementById('roomName').value;
-    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
-    
-    // 验证房间名称
-    if (!roomName || roomName.trim() === '') {
-        showError('请输入房间名称');
-        return;
-    }
-    
-    // 验证最大玩家数
-    if (isNaN(maxPlayers) || maxPlayers < 2 || maxPlayers > 8) {
-        showError('玩家数量必须在2-8之间');
-        return;
-    }
-    
-    // 显示加载提示
-    showLoading('正在创建房间...');
-    
-    // 获取当前玩家信息
-    const playerData = JSON.parse(localStorage.getItem('player'));
-    if (!playerData || !playerData.id) {
-        console.error('[DEBUG] 无效的玩家数据');
-        hideLoading();
-        showError('登录状态异常，请重新登录');
-        return;
-    }
-    
-    // 封装请求数据
-    const createRequest = {
-        roomName: roomName,
-        maxPlayers: maxPlayers,
-        hostId: playerData.id,
-        hostName: playerData.name,
-        createTime: new Date().getTime()
-    };
-    
-    console.debug('发送创建房间请求数据:', createRequest);
-    
-    try {
-        // 保存当前请求信息到session storage（用于恢复）
-        sessionStorage.setItem('lastCreateRoomRequest', JSON.stringify({
-            request: createRequest,
-            timestamp: new Date().getTime()
-        }));
-        
-        // 添加延迟以确保订阅已就绪
-        setTimeout(() => {
-            console.debug('正在发送创建房间请求...');
-            stompClient.send("/app/rooms/create", {}, JSON.stringify(createRequest));
-            console.debug('创建房间请求已发送');
-            
-            // 5秒后检查是否收到响应
-            setTimeout(() => {
-                console.debug('检查创建房间响应状态...');
-                const currentRoomId = localStorage.getItem('currentRoomId');
-                if (!currentRoomId) {
-                    console.warn('[DEBUG] 5秒内未收到创建房间响应，尝试恢复');
-                    handleCreateRoomTimeout();
-                }
-            }, 5000);
-        }, 100);
-    } catch (error) {
-        console.error('[DEBUG] 发送创建房间请求时发生错误:', error);
-        hideLoading();
-        showError('发送创建房间请求失败');
-        return;
-    }
-    
-    // 关闭创建房间模态框
-    const modal = bootstrap.Modal.getInstance(document.getElementById('createRoomModal'));
-    if (modal) {
-        modal.hide();
-    }
-}
-
-// 添加新的超时处理函数
-function handleCreateRoomTimeout() {
-    console.debug('处理创建房间超时...');
-    
-    try {
-        // 获取上次创建请求信息
-        const lastRequest = JSON.parse(sessionStorage.getItem('lastCreateRoomRequest'));
-        if (!lastRequest) {
-            console.warn('[DEBUG] 未找到上次创建请求信息');
-            return;
-        }
-        
-        // 检查是否真的超时（给10秒的余地）
-        const now = new Date().getTime();
-        if (now - lastRequest.timestamp < 10000) {
-            console.debug('尚未真正超时，继续等待');
-            return;
-        }
-        
-        // 尝试重新连接
-        console.debug('尝试重新连接并恢复状态');
-        showWarning('正在尝试恢复连接...');
-        
-        // 重新连接WebSocket
-        if (!stompClient || !stompClient.connected) {
-            connectWebSocket();
-        }
-        
-        // 尝试手动查找房间
-        tryManualEntryToNewRoom(lastRequest.request.hostId);
-        
-    } catch (error) {
-        console.error('[DEBUG] 处理创建房间超时出错:', error);
-        showError('创建房间失败，请重试');
-    } finally {
-        // 清理临时存储
-        sessionStorage.removeItem('lastCreateRoomRequest');
-    }
-}
-
+// 加入房间
 function joinRoom(roomId) {
-    if (!roomId) return;
-    
-    // 获取玩家数据
-    const playerData = JSON.parse(localStorage.getItem('player'));
-    if (!playerData || !playerData.id) {
-        showError('请先登录');
+    if (!stompClient || !stompClient.connected) {
+        showError('未连接到服务器');
         return;
     }
+
+    stompClient.send("/app/rooms/join", {}, JSON.stringify({
+        roomId: roomId,
+        playerId: currentPlayer
+    }));
+}
+
+// 发送聊天消息
+function sendMessage() {
+    const input = $('#chatInput');
+    const message = input.val().trim();
     
-    // 检查玩家是否已在某个房间
-    if (playerData.roomId) {
-        // 如果已经在同一个房间，显示返回房间消息并直接跳转
-        if (playerData.roomId === roomId) {
-            showInfo('您已在该房间中，正在返回...');
-            setTimeout(() => {
-                window.location.href = `/game.html?roomId=${roomId}`;
-            }, 1000);
-            return;
-        }
-        
-        // 如果在另一个房间，提示先离开当前房间
-        showWarning('您已在其他房间中，请先离开当前房间');
+    if (!message) return;
+    
+    if (!stompClient || !stompClient.connected) {
+        showError('未连接到服务器');
         return;
     }
-    
-    // 正常加入房间逻辑
-    showLoading('正在加入房间...');
-    
-    fetch(`/api/room/${roomId}/join`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ playerId: playerData.id })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        
-        if (data.error) {
-            showError(data.error);
-            return;
-        }
-        
-        // 成功加入房间，更新玩家数据
-        playerData.roomId = roomId;
-        localStorage.setItem('player', JSON.stringify(playerData));
-        
-        // 跳转到游戏页面
-        showSuccess('加入房间成功，正在进入游戏...');
-        setTimeout(() => {
-            window.location.href = `/game.html?roomId=${roomId}`;
-        }, 1000);
-    })
-    .catch(error => {
-        hideLoading();
-        showError('加入房间失败: ' + error.message);
-        console.error('加入房间失败:', error);
-    });
+
+    stompClient.send("/app/chat", {}, JSON.stringify({
+        sender: currentPlayer,
+        content: message,
+        timestamp: new Date().getTime()
+    }));
+
+    input.val('');
 }
 
-function showCreateRoomModal() {
-    const modal = new bootstrap.Modal(document.getElementById('createRoomModal'));
-    modal.show();
+// 显示聊天消息
+function displayChatMessage(message) {
+    const chatMessages = $('#chatMessages');
+    const messageElement = $(`
+        <div class="chat-message">
+            <span class="chat-sender">${message.sender}:</span>
+            <span class="chat-content">${message.content}</span>
+        </div>
+    `);
+    chatMessages.append(messageElement);
+    chatMessages.scrollTop(chatMessages[0].scrollHeight);
 }
 
-function forceReconnect() {
-    connectionAttempts = 0;
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    if (loadingIndicator) {
-        loadingIndicator.innerHTML = `
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">加载中...</span>
-            </div>
-            <p class="mt-2">正在连接服务器...</p>
-        `;
+// 处理系统消息
+function handleSystemMessage(message) {
+    switch (message.type) {
+        case 'ROOM_CREATED':
+            window.location.href = `game.html?roomId=${message.roomId}`;
+            break;
+        case 'ROOM_JOINED':
+            window.location.href = `game.html?roomId=${message.roomId}`;
+            break;
+        case 'ERROR':
+            showError(message.content);
+            break;
     }
-    connectWebSocket();
 }
 
-function backToLogin() {
-    localStorage.removeItem('playerName');
-    window.location.href = 'index.html';
+// 处理私人消息
+function handlePrivateMessage(message) {
+    switch (message.type) {
+        case 'KICK':
+            handleKick(message);
+            break;
+        case 'BAN':
+            handleBan(message);
+            break;
+    }
 }
 
+// 处理踢出
+function handleKick(message) {
+    localStorage.setItem('kicked_out', 'true');
+    localStorage.setItem('kicked_time', Date.now().toString());
+    localStorage.setItem('kicked_reason', message.reason || 'KICK');
+    window.location.href = 'login.html?reason=' + encodeURIComponent('您已被踢出游戏');
+}
+
+// 处理封禁
+function handleBan(message) {
+    const banInfo = {
+        bannedUntil: new Date().getTime() + (message.duration || 30) * 1000
+    };
+    sessionStorage.setItem('banInfo', JSON.stringify(banInfo));
+    window.location.href = 'login.html?reason=' + encodeURIComponent('您已被封禁');
+}
+
+// 退出登录
+function logout() {
+    if (stompClient && stompClient.connected) {
+        stompClient.disconnect();
+    }
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = 'login.html';
+}
+
+// 显示错误消息
+function showError(message) {
+    if (typeof layer !== 'undefined') {
+        layer.msg(message, {icon: 2});
+    } else {
+        alert(message);
+    }
+}
+
+// 显示成功消息
+function showSuccess(message) {
+    if (typeof layer !== 'undefined') {
+        layer.msg(message, {icon: 1});
+    } else {
+        alert(message);
+    }
+}
+
+// 显示警告消息
+function showWarning(message) {
+    if (typeof layer !== 'undefined') {
+        layer.msg(message, {icon: 3});
+    } else {
+        alert(message);
+    }
+}
+
+// 显示信息消息
+function showInfo(message) {
+    if (typeof layer !== 'undefined') {
+        layer.msg(message, {icon: 4});
+    } else {
+        alert(message);
+    }
+}
+
+// 显示加载提示
 function showLoading(message) {
     if (typeof layer !== 'undefined') {
         // 确保没有重复的loading
@@ -673,6 +345,7 @@ function showLoading(message) {
     }
 }
 
+// 隐藏加载提示
 function hideLoading() {
     if (typeof layer !== 'undefined' && window.loadingIndex) {
         layer.close(window.loadingIndex);
@@ -680,597 +353,148 @@ function hideLoading() {
     }
 }
 
-function showError(message) {
-    if (typeof layer !== 'undefined') {
-        layer.msg(message);
-    } else {
-        alert(message);
+// 检查登录状态
+function checkLoginStatus() {
+    const playerData = JSON.parse(localStorage.getItem('player'));
+    if (!playerData || !playerData.id) {
+        // 未登录，跳转到登录页
+        window.location.href = '/login.html';
     }
-    console.error(message);
 }
 
-function showSuccess(message) {
-    if (typeof layer !== 'undefined') {
-        layer.msg(message);
-    } else {
-        alert(message);
-    }
-    console.log(message);
-}
-
-function showInfo(message) {
-    if (typeof layer !== 'undefined') {
-        layer.msg(message);
-    }
-    console.log(message);
-}
-
-function showWarning(message) {
-    if (typeof layer !== 'undefined') {
-        layer.msg(message);
-    } else {
-        alert(message);
-    }
-    console.warn(message);
-}
-
-function logout() {
-    try {
-        console.log('开始退出操作');
-        
-        // 清理所有用户数据
-        clearAllUserData();
-        
-        // 发送离线通知
-        if (stompClient && stompClient.connected) {
-            showInfo('正在退出...');
-            
-            // 确保发送的是字符串ID而不是对象
-            const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
-            stompClient.send("/app/players/offline", {}, JSON.stringify(playerIdStr));
-            
-            // 断开WebSocket连接
-            stompClient.disconnect(() => {
-                console.log('WebSocket连接已断开');
-                // 跳转到登录页面
-                window.location.href = 'index.html';
-            });
-        } else {
-            console.log('WebSocket未连接，直接返回登录页面');
-            window.location.href = 'index.html';
+// 处理玩家离线
+function handlePlayerOffline(playerId) {
+    console.debug('处理玩家离线:', playerId);
+    
+    // 从本地玩家列表中移除
+    const playerList = $('#playerList');
+    if (playerList) {
+        const playerElement = playerList.find(`[data-player-id="${playerId}"]`);
+        if (playerElement) {
+            playerElement.remove();
         }
-    } catch (error) {
-        console.error('退出时发生错误:', error);
-        // 发生错误时也要清理数据
-        clearAllUserData();
-        showError('退出时发生错误，将返回登录页面');
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1500);
     }
-}
-
-// 清理所有用户数据
-function clearAllUserData() {
-    try {
-        console.debug('清除所有用户数据...');
-        
-        // 清除localStorage中的用户数据
-        localStorage.removeItem('player');
-        localStorage.removeItem('currentRoomId');
-        localStorage.removeItem('gameState');
-        localStorage.removeItem('token');
-        localStorage.removeItem('lastLogin');
-        localStorage.removeItem('userSettings');
-        
-        // 清除所有游戏相关数据
-        const gameData = [
-            'currentRoomId',
-            'gameHand',
-            'gamePile',
-            'gameHistory',
-            'gameSettings',
-            'lastGameState',
-            'playerStatus',
-            'gameRole',
-            'readyState',
-            'turnOrder',
-            'currentTurn',
-            'gamePhase'
-        ];
-        
-        // 清除localStorage和sessionStorage中的游戏数据
-        gameData.forEach(key => {
-            localStorage.removeItem(key);
-            sessionStorage.removeItem(key);
-        });
-        
-        // 清除sessionStorage
-        sessionStorage.clear();
-        
-        console.debug('用户数据清除完成');
-    } catch (error) {
-        console.error('[DEBUG] 清除用户数据失败:', error);
-    }
-}
-
-function handleConnectionError() {
-    hideLoading();
     
-    if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
-        connectionAttempts++;
-        showWarning(`连接失败，正在尝试重新连接(${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
-        
-        // 使用递增的延迟时间重试
-        setTimeout(connectWebSocket, 1000 * connectionAttempts);
-    } else {
-        showError('无法连接到服务器，请检查网络连接后重试');
-        // 清除登录状态
-        clearAllUserData();
-        // 延迟返回登录页
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 2000);
-    }
-}
-
-// 在加入房间响应处理中清除超时
-function clearJoinTimeout() {
-    if (window.currentJoinTimeout) {
-        clearTimeout(window.currentJoinTimeout);
-        window.currentJoinTimeout = null;
-    }
-}
-
-// 清理游戏相关缓存
-function clearGameCache() {
-    console.debug('清理游戏缓存...');
-    
-    // 清除游戏相关数据
-    const gameData = [
-        'currentRoomId',    // 当前房间ID
-        'gameHand',        // 玩家手牌
-        'gamePile',        // 游戏牌堆
-        'gameHistory',     // 游戏历史记录
-        'gameSettings',    // 游戏设置
-        'lastGameState',   // 最后的游戏状态
-        'playerStatus',    // 玩家状态
-        'gameRole',        // 游戏角色
-        'readyState',      // 准备状态
-        'turnOrder',       // 回合顺序
-        'currentTurn',     // 当前回合
-        'gamePhase'        // 游戏阶段
-    ];
-    
-    gameData.forEach(key => {
-        if (localStorage.getItem(key)) {
-            console.log(`[DEBUG] 清除缓存: ${key}`);
-            localStorage.removeItem(key);
-        }
-    });
-    
-    console.debug('游戏缓存清理完成');
-}
-
-// 添加新函数，尝试手动查找并进入玩家创建的房间
-function tryManualEntryToNewRoom(playerName) {
-    console.debug('尝试手动查找并进入房间 - 玩家:', playerName);
-    
-    // 发送请求获取当前房间列表
-    if (stompClient && stompClient.connected) {
-        stompClient.send("/app/rooms/list", {}, JSON.stringify({
-            playerId: playerName
-        }));
-        
-        // 临时订阅房间列表以进行一次性处理
-        const tempSub = stompClient.subscribe('/topic/rooms', function(message) {
-            // 处理完后取消订阅
-            tempSub.unsubscribe();
-            
-            try {
-                const rooms = JSON.parse(message.body);
-                console.debug('手动查找房间 - 收到房间列表:', rooms);
-                
-                // 查找玩家作为房主的房间
-                const playerRoom = rooms.find(room => room.hostId === playerName);
-                
-                if (playerRoom) {
-                    console.debug('找到玩家创建的房间:', playerRoom);
-                    
-                    // 保存房间ID并跳转
-                    localStorage.setItem('currentRoomId', playerRoom.id);
-                    console.debug('手动保存房间ID:', playerRoom.id);
-                    
-                    // 显示成功提示
-                    showSuccess('房间创建成功，正在进入...');
-                    
-                    // 跳转到游戏页面
-                    setTimeout(() => {
-                        const gameUrl = `game.html?roomId=${playerRoom.id}`;
-                        console.debug('手动跳转到:', gameUrl);
-                        window.location.href = gameUrl;
-                    }, 1000);
-                } else {
-                    console.warn('[DEBUG] 未找到玩家创建的房间');
-                    showError('房间创建可能出现问题，请重试');
+    // 从房间列表中更新该玩家的状态
+    const roomList = $('#roomList');
+    if (roomList) {
+        const roomElements = roomList.find('.room-item');
+        roomElements.each(function() {
+            const playerElements = $(this).find('.player-item');
+            playerElements.each(function() {
+                if ($(this).data('player-id') === playerId) {
+                    $(this).find('.status-text').addClass('status-offline');
+                    $(this).find('.status-text').text('离线');
                 }
-            } catch (error) {
-                console.error('[DEBUG] 手动查找房间时出错:', error);
-            }
+            });
         });
-    } else {
-        console.error('[DEBUG] 无法手动查找房间 - WebSocket未连接');
-        showError('连接已断开，请刷新页面');
     }
 }
 
-function connect() {
-    // 获取玩家信息
-    const player = JSON.parse(localStorage.getItem('player'));
-    if (!player) {
-        console.error('未找到玩家信息，请重新登录');
-        alert('登录信息已失效，请重新登录');
-        window.location.href = 'index.html';
+// 更新在线玩家列表
+function updateOnlinePlayers(players) {
+    console.debug('更新在线玩家列表:', players);
+    
+    const playerList = $('#playerList');
+    if (!playerList) return;
+    
+    // 获取当前玩家ID
+    const currentPlayerData = JSON.parse(localStorage.getItem('player'));
+    const currentPlayerId = currentPlayerData ? currentPlayerData.id : '';
+    
+    // 清空现有列表
+    playerList.empty();
+    
+    if (!players || players.length === 0) {
+        playerList.html('<div class="text-center text-light p-3">暂无在线玩家</div>');
         return;
     }
     
-    // 显示连接中状态
-    showLoading('正在连接到服务器...');
-    
-    try {
-        // 使用GameState中的统一连接方法
-        GameState.connect(player.id, 
-            function(frame) {
-                // 连接成功回调
-                hideLoading();
-                console.log('连接成功');
-                
-                // 设置全局变量
-                currentPlayer = player;
-                
-                // 设置玩家在线状态
-                const onlineStatus = {
-                    id: player.id,
-                    name: player.name,
-                    status: 'ONLINE'
-                };
-                
-                // 发送上线消息
-                GameState.stompClient.send("/app/players/online", {}, JSON.stringify(onlineStatus));
-                
-                // 订阅房间列表更新
-                GameState.stompClient.subscribe('/topic/rooms', function(message) {
-                    handleRoomListUpdate(JSON.parse(message.body));
-                });
-                
-                // 订阅玩家创建房间的结果
-                GameState.stompClient.subscribe('/user/' + player.id + '/queue/createRoom', function(message) {
-                    handleCreateRoomResponse(JSON.parse(message.body));
-                });
-                
-                // 订阅玩家加入房间的结果
-                GameState.stompClient.subscribe('/user/' + player.id + '/queue/joinRoom', function(message) {
-                    handleJoinRoomResponse(JSON.parse(message.body));
-                });
-                
-                // 订阅系统消息
-                GameState.stompClient.subscribe('/topic/system', function(message) {
-                    handleSystemMessage(JSON.parse(message.body));
-                });
-                
-                // 请求房间列表
-                refreshRoomList();
-                
-                // 显示玩家名称
-                document.getElementById('playerName').textContent = player.name;
-            },
-            function(error) {
-                // 连接失败回调
-                hideLoading();
-                console.error('连接失败:', error);
-                showError('连接服务器失败，请稍后重试');
-                
-                // 5秒后重试
-                setTimeout(connect, 5000);
-            }
-        );
-    } catch (error) {
-        hideLoading();
-        console.error('连接过程中出错:', error);
-        showError('连接发生错误: ' + error.message);
-        
-        // 5秒后重试
-        setTimeout(connect, 5000);
-    }
+    // 添加在线玩家
+    players.forEach(playerId => {
+        const playerElement = $(`
+            <div class="player-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-light">${playerId}</span>
+                    ${playerId === currentPlayerId ? '<span class="badge bg-info ms-2">我</span>' : ''}
+                </div>
+            </div>
+        `);
+        playerList.append(playerElement);
+    });
 }
 
-function sendPlayerOnlineStatus() {
-    if (!stompClient || !stompClient.connected) {
-        console.error('[DEBUG] 无法发送在线状态：WebSocket未连接');
-        return;
-    }
-    
+// 添加聊天功能
+function setupChat() {
     try {
-        const playerData = JSON.parse(localStorage.getItem('player'));
-        if (!playerData) {
-            console.error('[DEBUG] 无法发送在线状态：未找到玩家信息');
+        // 检查是否已存在聊天容器
+        let chatContainer = $('.chat-container');
+        if (chatContainer.length > 0) {
+            console.debug('聊天容器已存在');
             return;
         }
         
-        const onlineStatus = {
-            id: playerData.id,
-            name: playerData.name,
-            status: 'ONLINE',
-            loginTime: playerData.loginTime || new Date().getTime()
-        };
+        // 检查主容器是否存在，如果不存在则创建
+        let mainContainer = $('.container');
+        if (!mainContainer) {
+            mainContainer = $('<div>');
+            mainContainer.addClass('container');
+            $('body').append(mainContainer);
+        }
         
-        console.debug('准备发送在线状态:', onlineStatus);
+        // 创建聊天容器
+        chatContainer = $('<div>');
+        chatContainer.addClass('chat-container');
+        chatContainer.html(`
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chatInput" placeholder="输入消息...">
+                <button class="chat-send-btn" onclick="sendMessage()">发送</button>
+            </div>
+        `);
         
-        // 发送在线状态
-        stompClient.send("/app/players/online", {}, JSON.stringify(onlineStatus));
-        console.debug('发送在线状态成功');
+        // 将聊天容器添加到主容器
+        mainContainer.append(chatContainer);
         
-        // 发送成功后，立即请求一次玩家列表更新
-        setTimeout(() => {
-            requestPlayerListUpdate();
-        }, 500);
-        
-        // 设置定时发送在线状态的定时器(每60秒发送一次)
-        if (!window.playerOnlineStatusInterval) {
-            window.playerOnlineStatusInterval = setInterval(() => {
-                if (stompClient && stompClient.connected) {
-                    stompClient.send("/app/players/online", {}, JSON.stringify({
-                        ...onlineStatus,
-                        timestamp: new Date().getTime()
-                    }));
-                    console.debug('定时发送在线状态');
+        // 添加回车发送功能
+        const chatInput = $('#chatInput');
+        if (chatInput) {
+            chatInput.keypress(function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
                 }
-            }, 60000);
+            });
         }
+        
+        console.debug('聊天容器设置完成');
     } catch (error) {
-        console.error('[DEBUG] 发送在线状态失败:', error);
+        console.error('设置聊天容器时出错:', error);
     }
 }
 
-// 添加一个新的函数，请求更新玩家列表
-function requestPlayerListUpdate() {
-    if (stompClient && stompClient.connected) {
-        console.debug('请求更新玩家列表');
-        
-        // 确保发送玩家ID为字符串
-        const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
-        
-        stompClient.send("/app/players/list", {}, JSON.stringify({
-            requestTime: new Date().getTime(),
-            playerId: playerIdStr  // 添加当前玩家ID以便后台能够识别请求来源
-        }));
-    } else {
-        console.warn('[DEBUG] 无法请求玩家列表：WebSocket未连接');
-    }
+// 添加聊天消息订阅
+function setupChatSubscription() {
+    if (!stompClient || !stompClient.connected) return;
+    
+    stompClient.subscribe('/topic/chat', function(message) {
+        displayChatMessage(JSON.parse(message.body));
+    });
 }
 
-// 处理强制登出通知
-function handleForceLogout(notification) {
-    console.debug('收到强制登出通知:', notification);
-    
-    // 显示被踢出的消息
-    const reason = notification.reason || '违反规则';
-    const message = notification.message || `您已被管理员踢出游戏，原因：${reason}`;
-    
-    // 使用layer显示消息
-    if (typeof layer !== 'undefined') {
-        layer.msg(message, {time: 3000});
-    } else {
-        alert(message);
-    }
-    
-    // 清除本地存储中的玩家数据
-    localStorage.removeItem('player');
-    localStorage.removeItem('token');
-    localStorage.removeItem('currentRoom');
-    localStorage.removeItem('readyPlayers');
-    
-    // 清除会话存储
-    sessionStorage.clear();
-    
-    // 尝试删除游戏缓存
-    try {
-        if (window.indexedDB) {
-            const request = window.indexedDB.deleteDatabase('gameCache');
-            request.onsuccess = function() {
-                console.debug('游戏缓存已成功删除');
-            };
-            request.onerror = function() {
-                console.error('[DEBUG] 无法删除游戏缓存');
-            };
-        }
-    } catch (e) {
-        console.error('[DEBUG] 删除游戏缓存时出错:', e);
-    }
-    
-    // 调用其他清理函数（如果存在）
-    if (typeof clearAllUserData === 'function') {
-        clearAllUserData();
-    }
-    
-    if (typeof clearGameCache === 'function') {
-        clearGameCache();
-    }
-    
-    // 断开WebSocket连接
-    if (stompClient && stompClient.connected) {
-        stompClient.disconnect();
-        console.debug('WebSocket连接已断开');
-    }
-    
-    // 设置踢出标志和时间
-    localStorage.setItem('kicked_out', 'true');
-    localStorage.setItem('kicked_time', Date.now().toString());
-    localStorage.setItem('kicked_reason', reason);
-    
-    // 延迟跳转到登录页面，给用户一点时间看到消息
-    setTimeout(function() {
-        window.location.href = '/index.html?reason=' + encodeURIComponent('您已被踢出游戏');
-    }, 2000);
-}
-
-// 检查禁用状态
-function checkBanStatus() {
-    try {
-        // 从sessionStorage中获取禁用信息
-        const banInfoStr = sessionStorage.getItem('banInfo');
-        if (!banInfoStr) {
-            return false;
-        }
-        
-        const banInfo = JSON.parse(banInfoStr);
-        const now = new Date().getTime();
-        
-        // 如果有禁用结束时间
-        if (banInfo.bannedUntil) {
-            const banUntil = new Date(banInfo.bannedUntil);
-            
-            // 如果禁用时间未过
-            if (banUntil > now) {
-                // 计算剩余时间
-                const remainingMinutes = Math.ceil((banUntil - now) / (60 * 1000));
-                const message = `您的账号已被暂时禁用，${remainingMinutes}分钟后可再次登录`;
-                
-                showWarning(message);
-                
-                // 延迟跳转
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
-                
-                return true;
-            } else {
-                // 禁用时间已过，清除禁用信息
-                sessionStorage.removeItem('banInfo');
-                return false;
+// 初始化大厅
+function initializeLobby() {
+    // 移除重复的按钮和元素
+    const duplicateButtons = $('.room-actions');
+    if (duplicateButtons.length > 1) {
+        duplicateButtons.each(function() {
+            if ($(this).index() > 0) {
+                $(this).remove();
             }
-        }
-        
-        return false;
-    } catch (error) {
-        console.error('[DEBUG] 检查禁用状态出错:', error);
-        // 出错时清除禁用信息
-        sessionStorage.removeItem('banInfo');
-        return false;
-    }
-}
-
-// 添加createRoom函数
-function createRoom() {
-    sendCreateRoomRequest();
-}
-
-// 添加一个新的函数，请求更新玩家列表
-function requestPlayerListUpdate() {
-    if (stompClient && stompClient.connected) {
-        console.debug('请求更新玩家列表');
-        stompClient.send("/app/players/list", {}, JSON.stringify({
-            requestTime: new Date().getTime()
-        }));
-    }
-}
-
-// 添加机器人到房间
-function addRobots() {
-    const roomId = currentRoom.id;
-    if (!roomId) {
-        showMessage('错误', '请先创建或加入房间');
-        return;
+        });
     }
     
-    const count = prompt('请输入要添加的机器人数量 (1-3):', '1');
-    if (!count) return;
-    
-    const robotCount = parseInt(count);
-    if (isNaN(robotCount) || robotCount < 1 || robotCount > 3) {
-        showMessage('错误', '请输入1-3之间的数字');
-        return;
-    }
-    
-    // 调用API添加机器人
-    fetch(`/rooms/${roomId}/robots?count=${robotCount}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showMessage('错误', data.error);
-        } else {
-            showMessage('成功', `已添加${robotCount}个机器人`);
-        }
-    })
-    .catch(error => {
-        console.error('添加机器人失败:', error);
-        showMessage('错误', '添加机器人失败: ' + error.message);
-    });
-}
-
-// 从房间移除所有机器人
-function removeRobots() {
-    const roomId = currentRoom.id;
-    if (!roomId) {
-        showMessage('错误', '请先创建或加入房间');
-        return;
-    }
-    
-    // 调用API移除机器人
-    fetch(`/rooms/${roomId}/robots`, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showMessage('错误', data.error);
-        } else {
-            showMessage('成功', `已移除所有机器人`);
-        }
-    })
-    .catch(error => {
-        console.error('移除机器人失败:', error);
-        showMessage('错误', '移除机器人失败: ' + error.message);
-    });
-}
-
-// 更新UI
-function updateUI() {
-    const playerData = JSON.parse(localStorage.getItem('player'));
-    const playerName = playerData ? playerData.name : '游客';
-    document.getElementById('playerName').textContent = playerName;
-    
-    // 修复房间操作区的显示逻辑
-    const roomInfo = document.getElementById('roomInfo');
-    const createRoomBtn = document.getElementById('createRoomBtn');
-    const refreshRoomsBtn = document.getElementById('refreshRoomsBtn');
-    const hostActions = document.getElementById('hostActions');
-    
-    if (playerData && playerData.roomId) {
-        // 已在房间中
-        if (createRoomBtn) createRoomBtn.style.display = 'none';
-        if (refreshRoomsBtn) refreshRoomsBtn.style.display = 'none';
-        
-        // 房主特殊权限
-        if (hostActions && currentRoom && playerData.id === currentRoom.hostId) {
-            hostActions.style.display = 'block';
-        } else if (hostActions) {
-            hostActions.style.display = 'none';
-        }
-    } else {
-        // 未在房间中
-        if (createRoomBtn) createRoomBtn.style.display = 'inline-block';
-        if (refreshRoomsBtn) refreshRoomsBtn.style.display = 'inline-block';
-        if (hostActions) hostActions.style.display = 'none';
-    }
+    // 加载房间列表
+    loadRoomList();
 }
 
 // 修复加载函数，避免重复显示按钮
@@ -1288,25 +512,33 @@ window.onload = function() {
     updateUI();
 };
 
-// 初始化大厅
-function initializeLobby() {
-    // 移除重复的按钮和元素
-    const duplicateButtons = document.querySelectorAll('.room-actions');
-    if (duplicateButtons.length > 1) {
-        for (let i = 1; i < duplicateButtons.length; i++) {
-            duplicateButtons[i].remove();
-        }
-    }
-    
-    // 加载房间列表
-    loadRoomList();
-}
-
-// 检查登录状态
-function checkLoginStatus() {
+// 更新UI
+function updateUI() {
     const playerData = JSON.parse(localStorage.getItem('player'));
-    if (!playerData || !playerData.id) {
-        // 未登录，跳转到登录页
-        window.location.href = '/login.html';
+    const playerName = playerData ? playerData.name : '游客';
+    $('#playerName').text(playerName);
+    
+    // 修复房间操作区的显示逻辑
+    const roomInfo = $('#roomInfo');
+    const createRoomBtn = $('#createRoomBtn');
+    const refreshRoomsBtn = $('#refreshRoomsBtn');
+    const hostActions = $('#hostActions');
+    
+    if (playerData && playerData.roomId) {
+        // 已在房间中
+        if (createRoomBtn) createRoomBtn.hide();
+        if (refreshRoomsBtn) refreshRoomsBtn.hide();
+        
+        // 房主特殊权限
+        if (hostActions && currentRoom && playerData.id === currentRoom.hostId) {
+            hostActions.show();
+        } else if (hostActions) {
+            hostActions.hide();
+        }
+    } else {
+        // 未在房间中
+        if (createRoomBtn) createRoomBtn.show();
+        if (refreshRoomsBtn) refreshRoomsBtn.show();
+        if (hostActions) hostActions.hide();
     }
 } 

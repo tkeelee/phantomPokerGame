@@ -9,13 +9,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-
+import org.springframework.scheduling.annotation.Scheduled;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 
 /**
@@ -41,21 +42,17 @@ import javax.annotation.PostConstruct;
 @Slf4j
 @RequiredArgsConstructor
 public class AdminService {
-
+    
+    private static final Instant START_TIME = Instant.now();
+    private static final String VERSION = "1.0.0";
+    
+    private final Map<String, Player> playerCache = new ConcurrentHashMap<>();
     private final GameService gameService;
     private final SimpMessagingTemplate messagingTemplate;
-    
-    /** 玩家数据缓存，用于存储玩家信息，避免频繁查询数据库 */
-    private final Map<String, Player> playerCache = new HashMap<>();
-    
-    /** 服务器启动时间戳 */
-    private static final long START_TIME = System.currentTimeMillis();
+    private final ScheduledExecutorService scheduledExecutorService;
     
     /** 当前活跃的WebSocket会话映射表 */
     private static final Map<String, Instant> activeSessions = new ConcurrentHashMap<>();
-    
-    /** 系统版本号 */
-    private static final String VERSION = "1.0.0";
     
     /** 存储被禁用的玩家ID及其禁用时间 */
     private final Map<String, Instant> bannedPlayers = new ConcurrentHashMap<>();
@@ -66,6 +63,9 @@ public class AdminService {
      */
     @PostConstruct
     public void init() {
+        updatePlayerCache();
+        // 每60秒自动更新一次缓存
+        scheduledExecutorService.scheduleAtFixedRate(this::updatePlayerCache, 60, 60, TimeUnit.SECONDS);
         // 初始化黑名单
         log.info("初始化管理服务和黑名单");
         loadBannedPlayers();
@@ -158,18 +158,41 @@ public class AdminService {
      * </p>
      */
     private void updatePlayerCache() {
-        // 从GameService获取所有房间
-        List<GameRoom> gameRooms = gameService.getAllRooms();
-        
-        // 遍历所有房间中的玩家
-        for (GameRoom room : gameRooms) {
-            for (String playerId : room.getPlayers()) {
-                Player player = getOrCreatePlayer(playerId);
-                player.setRoomId(room.getId());
-                player.setStatus("PLAYING");
-                player.setLastActiveTime(Instant.now());
-                player.setActive(true);
+        try {
+            // 获取所有游戏房间中的玩家
+            List<GameRoom> gameRooms = gameService.getAllRooms();
+            Set<String> activePlayerIds = new HashSet<>();
+            
+            // 更新房间中的玩家状态
+            for (GameRoom room : gameRooms) {
+                for (String playerId : room.getPlayers()) {
+                    activePlayerIds.add(playerId);
+                    Player player = getOrCreatePlayer(playerId);
+                    player.setRoomId(room.getId());
+                    player.setStatus("PLAYING");
+                    player.setLastActiveTime(Instant.now());
+                    player.setActive(true);
+                }
             }
+            
+            // 更新不在房间中的在线玩家状态
+            playerCache.values().stream()
+                .filter(player -> player.isActive() && !activePlayerIds.contains(player.getId()))
+                .forEach(player -> {
+                    player.setRoomId(null);
+                    player.setStatus("ONLINE");
+                });
+                
+            // 移除长时间未活跃的玩家（超过30分钟）
+            Instant cutoffTime = Instant.now().minus(30, ChronoUnit.MINUTES);
+            playerCache.values().removeIf(player -> 
+                !player.isActive() && player.getLastActiveTime().isBefore(cutoffTime));
+                
+            // 直接发送更新，不再调用broadcastSystemData
+            messagingTemplate.convertAndSend("/topic/admin/players", new ArrayList<>(playerCache.values()));
+            messagingTemplate.convertAndSend("/topic/admin/rooms", getAllRooms());
+        } catch (Exception e) {
+            log.error("更新玩家缓存时发生错误: {}", e.getMessage(), e);
         }
     }
     
@@ -230,36 +253,15 @@ public class AdminService {
     
     /**
      * 获取系统信息
-     * <p>
-     * 收集并返回系统运行状态信息，包括：
-     * - 服务器启动时间
-     * - 运行时长
-     * - 当前连接数
-     * - 房间数量
-     * - 玩家数量
-     * - 系统版本
-     * - 服务器状态
-     * </p>
-     *
      * @return 系统信息对象
      */
     public AdminSystemInfo getSystemInfo() {
-        AdminSystemInfo info = new AdminSystemInfo();
-        info.setStartTime(Instant.ofEpochMilli(START_TIME));
-        // AdminSystemInfo不直接提供setUptime方法，我们使用Builder创建
-        //long uptime = System.currentTimeMillis() - START_TIME;
-        
-        // 使用Builder重新创建对象，包含所有必要字段
-        info = AdminSystemInfo.builder()
-            .startTime(Instant.ofEpochMilli(START_TIME))
-            .connectionCount(activeSessions.size())
+        return AdminSystemInfo.builder()
+            .startTime(START_TIME)
+            .connectionCount(getActiveConnectionCount())
             .roomCount(gameService.getAllRooms().size())
-            .playerCount(getAllPlayers().size())
-            .version(VERSION)
-            .serverStatus("运行中")
+            .playerCount(playerCache.size())
             .build();
-        
-        return info;
     }
     
     /**
@@ -444,11 +446,13 @@ public class AdminService {
      *
      * @param playerId 要移除的玩家ID
      */
-    private void removePlayer(String playerId) {
+    public void removePlayer(String playerId) {
         try {
             // 从缓存中移除
             playerCache.remove(playerId);
             log.info("玩家已从系统中移除: {}", playerId);
+            // 立即广播更新
+            broadcastSystemData();
         } catch (Exception e) {
             log.error("移除玩家时出错: {}", e.getMessage());
         }
@@ -517,29 +521,15 @@ public class AdminService {
     
     /**
      * 广播系统数据更新
-     * <p>
-     * 向客户端广播最新的房间列表和玩家列表信息
-     * </p>
      */
     public void broadcastSystemData() {
-        log.info("广播系统数据更新");
-        
         try {
-            // 广播房间列表更新
-            List<GameRoom> roomsList = gameService.getAllRooms();
-            messagingTemplate.convertAndSend("/topic/admin/rooms", roomsList);
-            
-            // 广播玩家列表更新
-            updatePlayerCache();
-            List<Player> playersList = new ArrayList<>(playerCache.values());
-            messagingTemplate.convertAndSend("/topic/admin/players", playersList);
-            
-            // 广播系统信息更新
-            messagingTemplate.convertAndSend("/topic/admin/system", getSystemInfo());
-            
-            log.info("系统数据广播完成");
+            // 不再调用updatePlayerCache，直接发送当前状态
+            messagingTemplate.convertAndSend("/topic/admin/players", new ArrayList<>(playerCache.values()));
+            messagingTemplate.convertAndSend("/topic/admin/rooms", getAllRooms());
+            log.debug("已广播系统数据更新");
         } catch (Exception e) {
-            log.error("广播系统数据时出错: {}", e.getMessage());
+            log.error("广播系统数据更新失败: {}", e.getMessage(), e);
         }
     }
 
@@ -623,4 +613,49 @@ public class AdminService {
         // 此处为简化示例，仅打印日志
         log.info("加载被禁用玩家列表");
     }
+
+    /**
+     * 将玩家标记为离线
+     * @param playerId 玩家ID
+     */
+    public void markPlayerOffline(String playerId) {
+        Player player = playerCache.get(playerId);
+        if (player != null) {
+            player.setActive(false);
+            player.setStatus("OFFLINE");
+            player.setLastActiveTime(Instant.now());
+            // 立即广播更新
+            broadcastSystemData();
+        }
+    }
+
+    /**
+     * 广播系统信息更新
+     */
+    private void broadcastSystemInfo() {
+        try {
+            messagingTemplate.convertAndSend("/topic/admin/system", getSystemInfo());
+            log.debug("已广播系统信息更新");
+        } catch (Exception e) {
+            log.error("广播系统信息更新失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取活跃连接数
+     */
+    private int getActiveConnectionCount() {
+        return (int) playerCache.values().stream()
+            .filter(Player::isActive)
+            .count();
+    }
+
+    /**
+     * 定时更新系统信息
+     */
+    @Scheduled(fixedRate = 60000) // 每分钟更新一次
+    public void scheduledSystemInfoUpdate() {
+        broadcastSystemInfo();
+    }
+
 } 

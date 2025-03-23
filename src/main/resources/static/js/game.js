@@ -1021,14 +1021,19 @@ function startGame() {
         return;
     }
 
+    // 获取选择的牌组数量
+    const deckCount = parseInt(document.getElementById('deckCount').value) || 1;
+    
     // 确保发送玩家ID为字符串
     const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
+    showLoading('正在开始游戏...');
     
     stompClient.send("/app/game/action", {}, JSON.stringify({
         type: "START",
         roomId: currentRoomId,
         playerId: playerIdStr,
-        deckCount: 1  // 默认使用1副牌
+        deckCount: deckCount
     }));
 }
 
@@ -1370,11 +1375,17 @@ function updateGameUI() {
         // 更新开始游戏按钮状态
         const startBtn = document.getElementById('startBtn');
         if (startBtn) {
-            const canStart = gameState.isHost && 
-                           gameState.status === 'WAITING' && 
-                           gameState.players.length >= 2 &&
-                           gameState.players.every(player => gameState.readyPlayers.includes(player));
-            startBtn.style.display = canStart ? 'inline-block' : 'none';
+            const players = state.players || gameState.players || [];
+            const readyPlayers = state.readyPlayers || gameState.readyPlayers || [];
+            const allReady = players.length >= 2 && readyPlayers.length === players.length;
+            const isHost = state.hostId === currentPlayer || gameState.isHost;
+            
+            if (isHost && allReady && state.gameStatus === 'WAITING') {
+                startBtn.style.display = 'block';
+                startBtn.disabled = false;
+            } else {
+                startBtn.style.display = 'none';
+            }
         }
 
         // 更新游戏操作按钮状态
@@ -2198,3 +2209,333 @@ function initializeControls() {
     
     console.debug('游戏控制按钮初始化完成');
 }
+
+// 手牌选择相关
+let selectedCards = new Set();
+
+function toggleCardSelection(cardElement, card) {
+    if (!gameState.isMyTurn) {
+        showWarning('还没到您的回合');
+        return;
+    }
+    
+    if (cardElement.classList.contains('selected')) {
+        cardElement.classList.remove('selected');
+        cardElement.style.transform = '';
+        selectedCards.delete(card);
+    } else {
+        cardElement.classList.add('selected');
+        cardElement.style.transform = 'translateY(-20px)';
+        selectedCards.add(card);
+    }
+    
+    // 更新声明的牌数
+    updateDeclaredCount();
+}
+
+function updateDeclaredCount() {
+    const declareInput = document.getElementById('declareValue');
+    if (declareInput) {
+        declareInput.setAttribute('placeholder', `声明点数（${selectedCards.size}张）`);
+    }
+}
+
+function playCards() {
+    if (!gameState.isMyTurn) {
+        showWarning('还没到您的回合');
+        return;
+    }
+    
+    if (selectedCards.size === 0) {
+        showWarning('请选择要出的牌');
+        return;
+    }
+    
+    const declareValue = document.getElementById('declareValue').value;
+    if (!declareValue) {
+        showWarning('请声明点数');
+        return;
+    }
+    
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
+    stompClient.send("/app/game/action", {}, JSON.stringify({
+        type: "PLAY",
+        roomId: currentRoomId,
+        playerId: playerIdStr,
+        cards: Array.from(selectedCards),
+        declaredValue: declareValue
+    }));
+    
+    // 清除选择
+    clearCardSelection();
+}
+
+function clearCardSelection() {
+    selectedCards.clear();
+    const cards = document.querySelectorAll('.card.selected');
+    cards.forEach(card => {
+        card.classList.remove('selected');
+        card.style.transform = '';
+    });
+    
+    // 清除声明值
+    const declareInput = document.getElementById('declareValue');
+    if (declareInput) {
+        declareInput.value = '';
+        declareInput.setAttribute('placeholder', '声明点数');
+    }
+}
+
+function pass() {
+    if (!gameState.isMyTurn) {
+        showWarning('还没到您的回合');
+        return;
+    }
+    
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
+    stompClient.send("/app/game/action", {}, JSON.stringify({
+        type: "PASS",
+        roomId: currentRoomId,
+        playerId: playerIdStr
+    }));
+    
+    // 清除选择
+    clearCardSelection();
+}
+
+function challenge() {
+    if (!gameState.isMyTurn) {
+        showWarning('还没到您的回合');
+        return;
+    }
+    
+    // 确保发送玩家ID为字符串
+    const playerIdStr = typeof currentPlayer === 'object' ? currentPlayer.id : currentPlayer;
+    
+    stompClient.send("/app/game/action", {}, JSON.stringify({
+        type: "CHALLENGE",
+        roomId: currentRoomId,
+        playerId: playerIdStr
+    }));
+    
+    // 清除选择
+    clearCardSelection();
+}
+
+// 更新手牌显示
+function updateHandCards(cards) {
+    const handContainer = document.getElementById('playerHand');
+    if (!handContainer) return;
+    
+    handContainer.innerHTML = '';
+    
+    cards.forEach(card => {
+        const cardElement = document.createElement('div');
+        cardElement.className = 'card';
+        cardElement.innerHTML = `
+            <div class="card-inner">
+                <div class="card-face">
+                    <span class="card-value">${card.value}</span>
+                    <span class="card-suit ${card.suit.toLowerCase()}">${getSuitSymbol(card.suit)}</span>
+                </div>
+            </div>
+        `;
+        
+        cardElement.onclick = () => toggleCardSelection(cardElement, card);
+        handContainer.appendChild(cardElement);
+    });
+}
+
+function getSuitSymbol(suit) {
+    switch(suit.toUpperCase()) {
+        case 'HEARTS': return '♥';
+        case 'DIAMONDS': return '♦';
+        case 'CLUBS': return '♣';
+        case 'SPADES': return '♠';
+        default: return suit;
+    }
+}
+
+// 更新当前出牌区域
+function updateCurrentPlay(cards, declaredValue) {
+    const playArea = document.getElementById('currentPlay');
+    if (!playArea) return;
+    
+    playArea.innerHTML = '';
+    
+    if (cards && cards.length > 0) {
+        const cardsHtml = cards.map(card => `
+            <div class="card played">
+                <div class="card-inner">
+                    <div class="card-face">
+                        <span class="card-value">${card.value}</span>
+                        <span class="card-suit ${card.suit.toLowerCase()}">${getSuitSymbol(card.suit)}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        playArea.innerHTML = `
+            <div class="current-play-info">
+                <span>当前出牌：${cards.length}张</span>
+                <span>声明：${declaredValue}</span>
+            </div>
+            <div class="played-cards">
+                ${cardsHtml}
+            </div>
+        `;
+    } else {
+        playArea.innerHTML = '<div class="no-cards">暂无出牌</div>';
+    }
+}
+
+// 更新房间状态显示
+function updateRoomStatus(gameState) {
+    if (!gameState) return;
+    
+    const roomStatusContainer = document.getElementById('roomStatus');
+    if (!roomStatusContainer) return;
+    
+    const playerData = JSON.parse(localStorage.getItem('player'));
+    const isHost = playerData && gameState.hostId === playerData.id;
+    
+    // 获取准备玩家数量和总玩家数量
+    const readyPlayersCount = gameState.readyPlayers ? gameState.readyPlayers.length : 0;
+    const totalPlayers = gameState.players ? gameState.players.length : 0;
+    
+    // 创建房主控制面板
+    let hostControlsHtml = '';
+    if (isHost && gameState.status === 'WAITING') {
+        hostControlsHtml = `
+            <div id="hostControls" class="host-controls mt-3">
+                <button class="btn btn-secondary me-2" onclick="addRobot()">添加机器人</button>
+                <button class="btn btn-danger me-2" onclick="removeAllRobots()">移除所有机器人</button>
+                ${readyPlayersCount === totalPlayers && totalPlayers >= 2 ? 
+                    '<button class="btn btn-success" onclick="startGame()">开始游戏</button>' : 
+                    '<button class="btn btn-success" disabled>等待玩家准备 (${readyPlayersCount}/${totalPlayers})</button>'}
+            </div>
+        `;
+    }
+    
+    roomStatusContainer.innerHTML = `
+        <div class="room-info">
+            <h3>房间 ${gameState.roomId}</h3>
+            <div class="status-badges">
+                <span class="badge ${gameState.status === 'WAITING' ? 'bg-info' : 'bg-success'}">
+                    ${gameState.status === 'WAITING' ? '等待中' : '游戏中'}
+                </span>
+                <span class="badge bg-primary">
+                    ${readyPlayersCount}/${totalPlayers} 已准备
+                </span>
+            </div>
+        </div>
+        ${hostControlsHtml}
+    `;
+}
+
+// 添加机器人
+function addRobot() {
+    if (!stompClient || !stompClient.connected) return;
+    
+    const roomId = getRoomId();
+    if (!roomId) return;
+    
+    stompClient.send("/app/game/addRobot", {}, JSON.stringify({
+        roomId: roomId,
+        difficulty: "NORMAL" // 可以添加难度选择UI
+    }));
+}
+
+// 移除所有机器人
+function removeAllRobots() {
+    if (!stompClient || !stompClient.connected) return;
+    
+    const roomId = getRoomId();
+    if (!roomId) return;
+    
+    stompClient.send("/app/game/removeRobots", {}, JSON.stringify({
+        roomId: roomId
+    }));
+}
+
+// 开始游戏
+function startGame() {
+    if (!stompClient || !stompClient.connected) return;
+    
+    const roomId = getRoomId();
+    if (!roomId) return;
+    
+    stompClient.send("/app/game/start", {}, JSON.stringify({
+        roomId: roomId
+    }));
+}
+
+// 获取房间ID
+function getRoomId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('roomId');
+}
+
+// 添加样式
+const gameStyles = document.createElement('style');
+gameStyles.textContent = `
+    .room-info {
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .host-controls {
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+    
+    .status-badges {
+        margin-top: 10px;
+    }
+    
+    .badge {
+        margin-right: 8px;
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .player-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+        padding: 15px;
+    }
+    
+    .player-card {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 15px;
+        transition: all 0.3s ease;
+    }
+    
+    .player-card:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .player-name {
+        font-size: 16px;
+        font-weight: 500;
+        color: #fff;
+        margin-bottom: 8px;
+    }
+    
+    .player-status {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+`;
+document.head.appendChild(gameStyles);

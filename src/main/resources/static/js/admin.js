@@ -63,7 +63,7 @@ function connect() {
         
         addLog('WebSocket连接成功', 'success');
         
-        // 加载数据
+        // 加载初始数据
         loadAllData();
         
         // 订阅更新
@@ -81,6 +81,15 @@ function connect() {
             const serverInfo = JSON.parse(message.body);
             updateSystemInfo(serverInfo);
         });
+        
+        // 订阅玩家状态变更
+        stompClient.subscribe('/topic/players/status', function(message) {
+            const statusUpdate = JSON.parse(message.body);
+            handlePlayerStatusUpdate(statusUpdate);
+        });
+        
+        // 定期请求更新数据（每30秒）
+        setInterval(loadAllData, 30000);
     }, function(error) {
         // 连接失败
         document.getElementById('connectionStatus').textContent = '连接失败';
@@ -90,19 +99,36 @@ function connect() {
     });
 }
 
+// 处理玩家状态更新
+function handlePlayerStatusUpdate(statusUpdate) {
+    if (statusUpdate.type === 'PLAYER_OFFLINE') {
+        const playerId = statusUpdate.playerId;
+        if (systemData.players[playerId]) {
+            systemData.players[playerId].active = false;
+            systemData.players[playerId].status = 'OFFLINE';
+            systemData.players[playerId].lastActiveTime = new Date(statusUpdate.timestamp);
+            renderPlayerList();
+        }
+    }
+}
+
 // 加载所有数据
 function loadAllData() {
-    // 请求管理员数据
-    stompClient.send("/app/admin/request-data-ws", {}, JSON.stringify({
-        requestType: "initial"
-    }));
+    if (!stompClient || !stompClient.connected) {
+        console.warn('WebSocket未连接，无法加载数据');
+        return;
+    }
     
-    // 立即请求系统信息
-    stompClient.send("/app/admin/system-info", {}, JSON.stringify({
-        timestamp: new Date().getTime()
-    }));
+    // 请求房间数据
+    stompClient.send("/app/admin/rooms/list", {});
     
-    addLog("请求系统数据更新", 'info');
+    // 请求玩家数据
+    stompClient.send("/app/admin/players/list", {});
+    
+    // 请求系统信息
+    stompClient.send("/app/admin/system/info", {});
+    
+    addLog('已请求更新所有数据', 'info');
 }
 
 // 更新房间数据

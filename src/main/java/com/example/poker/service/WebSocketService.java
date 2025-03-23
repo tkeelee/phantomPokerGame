@@ -11,6 +11,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.stream.Collectors;
 
 /**
  * WebSocket通信服务
@@ -25,10 +30,40 @@ public class WebSocketService {
     
     private final SimpMessagingTemplate messagingTemplate;
     private final RoomManagementService roomManagementService;
+    
+    // 用户会话管理
+    private final Map<String, Set<String>> userSessionIds = new ConcurrentHashMap<>();
+    private final Map<String, String> sessionUserIds = new ConcurrentHashMap<>();
 
     public WebSocketService(SimpMessagingTemplate messagingTemplate, RoomManagementService roomManagementService) {
         this.messagingTemplate = messagingTemplate;
         this.roomManagementService = roomManagementService;
+    }
+
+    /**
+     * 注册用户会话
+     */
+    public void registerUserSession(String userId, String sessionId) {
+        userSessionIds.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(sessionId);
+        sessionUserIds.put(sessionId, userId);
+        logger.debug("已注册用户会话 - 用户: {}, 会话: {}", userId, sessionId);
+    }
+    
+    /**
+     * 注销用户会话
+     */
+    public void unregisterUserSession(String sessionId) {
+        String userId = sessionUserIds.remove(sessionId);
+        if (userId != null) {
+            Set<String> userSessions = userSessionIds.get(userId);
+            if (userSessions != null) {
+                userSessions.remove(sessionId);
+                if (userSessions.isEmpty()) {
+                    userSessionIds.remove(userId);
+                }
+            }
+            logger.debug("已注销用户会话 - 用户: {}, 会话: {}", userId, sessionId);
+        }
     }
 
     /**
@@ -183,10 +218,94 @@ public class WebSocketService {
      */
     public void broadcastPlayerStatusUpdate(List<Player> players) {
         try {
+            // 1. 广播玩家列表更新
             messagingTemplate.convertAndSend("/topic/players", players);
-            logger.debug("已广播玩家状态更新，共 {} 个玩家", players.size());
+            
+            // 2. 广播强制刷新命令
+            Map<String, Object> refreshCommand = new HashMap<>();
+            refreshCommand.put("type", "REFRESH_PLAYERS");
+            refreshCommand.put("timestamp", System.currentTimeMillis());
+            messagingTemplate.convertAndSend("/topic/system/refresh", refreshCommand);
+            
+            // 3. 广播在线玩家状态
+            Map<String, Object> onlineStatus = new HashMap<>();
+            onlineStatus.put("type", "ONLINE_PLAYERS");
+            onlineStatus.put("players", players.stream()
+                .filter(Player::isActive)
+                .map(Player::getId)
+                .collect(Collectors.toList()));
+            onlineStatus.put("timestamp", System.currentTimeMillis());
+            messagingTemplate.convertAndSend("/topic/players/online", onlineStatus);
+            
+            logger.debug("已广播玩家状态更新 - 总玩家数: {}, 在线玩家数: {}", 
+                players.size(), 
+                players.stream().filter(Player::isActive).count());
         } catch (Exception e) {
             logger.error("广播玩家状态更新失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 通知玩家离线
+     * @param playerId 玩家ID
+     */
+    public void notifyPlayerOffline(String playerId) {
+        try {
+            // 1. 广播玩家离线状态
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("type", "PLAYER_OFFLINE");
+            notification.put("playerId", playerId);
+            notification.put("timestamp", System.currentTimeMillis());
+            messagingTemplate.convertAndSend("/topic/players/status", notification);
+            
+            // 2. 发送强制刷新命令
+            Map<String, Object> refreshCommand = new HashMap<>();
+            refreshCommand.put("type", "FORCE_REFRESH");
+            refreshCommand.put("reason", "PLAYER_OFFLINE");
+            refreshCommand.put("playerId", playerId);
+            refreshCommand.put("timestamp", System.currentTimeMillis());
+            messagingTemplate.convertAndSend("/topic/system/refresh", refreshCommand);
+            
+            logger.debug("已广播玩家离线状态和刷新命令 - 玩家: {}", playerId);
+        } catch (Exception e) {
+            logger.error("广播玩家离线状态失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 清理玩家的WebSocket会话
+     * @param playerId 玩家ID
+     */
+    public void cleanupPlayerSession(String playerId) {
+        try {
+            // 获取玩家的所有会话
+            Set<String> sessionIds = userSessionIds.get(playerId);
+            if (sessionIds != null) {
+                // 关闭所有会话
+                for (String sessionId : sessionIds) {
+                    try {
+                        messagingTemplate.convertAndSend("/user/" + sessionId + "/queue/notifications",
+                            Map.of(
+                                "type", "SESSION_CLOSED",
+                                "message", "您的会话已被关闭",
+                                "timestamp", System.currentTimeMillis()
+                            ));
+                    } catch (Exception e) {
+                        logger.error("发送会话关闭通知失败: {}", e.getMessage());
+                    }
+                }
+                
+                // 清理会话记录
+                userSessionIds.remove(playerId);
+                sessionIds.forEach(sessionUserIds::remove);
+            }
+            
+            // 发送离线通知
+            notifyPlayerOffline(playerId);
+            
+            logger.info("已清理玩家 {} 的WebSocket会话", playerId);
+        } catch (Exception e) {
+            logger.error("清理玩家WebSocket会话时出错: {}", e.getMessage(), e);
         }
     }
 } 

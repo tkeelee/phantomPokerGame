@@ -18,51 +18,123 @@ const GameState = {
     playerId: '',
     roomId: '',
     roomName: '',
-    // 连接WebSocket服务器
-    connect: function(username, successCallback, errorCallback) {
-        try {
-            console.log('正在连接WebSocket服务器...');
+    
+    /**
+     * 检查玩家登录状态
+     * @returns {boolean} 是否可以登录
+     */
+    checkLoginStatus() {
+        // 检查是否被踢出
+        const kickedOut = localStorage.getItem('kicked_out') === 'true';
+        const kickedTime = parseInt(localStorage.getItem('kicked_time') || '0');
+        const kickedReason = localStorage.getItem('kicked_reason');
+        
+        if (kickedOut) {
+            const now = Date.now();
+            const banDuration = 10000; // 10秒封禁时间
             
-            // 配置WebSocket连接（使用SockJS作为回退选项）
-            const socket = new SockJS('/ws');
-            this.stompClient = Stomp.over(socket);
-            
-            // 设置STOMP客户端连接头
-            const headers = {
-                login: username  // 设置用户名
-            };
-            
-            console.log('连接头信息:', JSON.stringify(headers));
-            
-            // 连接到STOMP broker
-            this.stompClient.connect(headers, 
-                // 连接成功回调
-                (frame) => {
-                    console.log('WebSocket连接成功:', frame);
-                    this.isConnected = true;
-                    this.playerId = username;
-                    
-                    // 如果提供了成功回调，则调用它
-                    if (successCallback) {
-                        successCallback(frame);
-                    }
-                },
-                // 连接错误回调
-                (error) => {
-                    console.error('WebSocket连接失败:', error);
-                    
-                    // 如果提供了错误回调，则调用它
-                    if (errorCallback) {
-                        errorCallback(error);
-                    }
-                }
-            );
-        } catch (e) {
-            console.error('建立WebSocket连接时发生错误:', e);
-            if (errorCallback) {
-                errorCallback(e);
+            if (now - kickedTime < banDuration) {
+                const remainingTime = Math.ceil((banDuration - (now - kickedTime)) / 1000);
+                layer.msg(`您已被踢出游戏，请在${remainingTime}秒后重试。原因：${kickedReason || '违反规则'}`, 
+                    {time: 3000});
+                return false;
+            } else {
+                // 清除踢出状态
+                localStorage.removeItem('kicked_out');
+                localStorage.removeItem('kicked_time');
+                localStorage.removeItem('kicked_reason');
             }
         }
+        
+        return true;
+    },
+    
+    /**
+     * 清理所有玩家数据
+     */
+    clearAllData() {
+        // 清除本地存储
+        localStorage.removeItem('player');
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentRoom');
+        localStorage.removeItem('readyPlayers');
+        
+        // 清除会话存储
+        sessionStorage.clear();
+        
+        // 清除游戏缓存
+        if (window.indexedDB) {
+            try {
+                indexedDB.deleteDatabase('gameCache');
+            } catch (e) {
+                console.error('清除游戏缓存失败:', e);
+            }
+        }
+        
+        // 断开WebSocket连接
+        if (this.stompClient && this.stompClient.connected) {
+            this.stompClient.disconnect();
+        }
+        
+        this.currentRoomId = null;
+        this.isConnected = false;
+    },
+    
+    /**
+     * 连接WebSocket
+     */
+    connect(playerId, onConnected, onError) {
+        // 检查登录状态
+        if (!this.checkLoginStatus()) {
+            if (onError) onError('登录状态检查失败');
+            return;
+        }
+        
+        const socket = new SockJS('/ws');
+        this.stompClient = Stomp.over(socket);
+        
+        this.stompClient.connect({}, 
+            frame => {
+                this.isConnected = true;
+                if (onConnected) onConnected(frame);
+                
+                // 订阅强制登出通知
+                this.stompClient.subscribe(`/user/${playerId}/queue/notifications`,
+                    message => {
+                        const notification = JSON.parse(message.body);
+                        if (notification.type === 'FORCE_LOGOUT') {
+                            this.handleForceLogout(notification);
+                        }
+                    });
+            },
+            error => {
+                this.isConnected = false;
+                if (onError) onError(error);
+                console.error('WebSocket连接失败:', error);
+            }
+        );
+    },
+    
+    /**
+     * 处理强制登出
+     */
+    handleForceLogout(notification) {
+        // 设置踢出状态
+        localStorage.setItem('kicked_out', 'true');
+        localStorage.setItem('kicked_time', Date.now().toString());
+        localStorage.setItem('kicked_reason', notification.reason || '违反规则');
+        
+        // 清理数据
+        this.clearAllData();
+        
+        // 显示消息
+        const message = notification.message || `您已被管理员踢出游戏，原因：${notification.reason || '违反规则'}`;
+        layer.msg(message, {time: 3000});
+        
+        // 延迟跳转到登录页
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 2000);
     },
     
     // 断开WebSocket连接

@@ -123,37 +123,44 @@ public class RobotPlayer extends Player {
                 selectedCards.add(sameValueCards.get(i));
             }
         } else {
-            // 解析上一个声明
+            // 如果不是新的一轮，需要根据上一个声明选择牌
             String[] parts = lastClaim.split(" ");
-            String requiredValue = parts[1];
+            String claimedValue = parts[1];
             
-            // 找出所有匹配的牌
-            List<Card> matchingCards = hand.stream()
-                    .filter(card -> card.getRank().equals(requiredValue))
+            // 找出手牌中点数相同的牌
+            List<Card> sameValueCards = hand.stream()
+                    .filter(card -> card.getRank().equals(claimedValue))
                     .toList();
             
-            if (!matchingCards.isEmpty()) {
-                // 如果有匹配的牌，根据难度决定出牌数量
-                int cardsToSelect = switch (difficulty) {
-                    case "EASY" -> Math.min(1 + random.nextInt(2), matchingCards.size());
-                    case "MEDIUM" -> Math.min(1 + random.nextInt(3), matchingCards.size());
-                    case "HARD" -> Math.min(2 + random.nextInt(2), matchingCards.size());
-                    default -> Math.min(1 + random.nextInt(2), matchingCards.size());
+            if (sameValueCards.isEmpty()) {
+                // 如果没有相同点数的牌，根据难度决定是否说谎
+                double lieThreshold = switch (difficulty) {
+                    case "EASY" -> 0.3;    // 简单模式30%概率说谎
+                    case "MEDIUM" -> 0.5;   // 中等模式50%概率说谎
+                    case "HARD" -> 0.7;     // 困难模式70%概率说谎
+                    default -> 0.5;
                 };
                 
-                for (int i = 0; i < cardsToSelect; i++) {
-                    selectedCards.add(matchingCards.get(i));
+                if (random.nextDouble() < lieThreshold) {
+                    // 选择说谎，随机选择1-2张牌
+                    int cardsToSelect = 1 + random.nextInt(2);
+                    for (int i = 0; i < Math.min(cardsToSelect, hand.size()); i++) {
+                        selectedCards.add(hand.get(i));
+                    }
                 }
+                // 如果不说谎，返回空列表表示过牌
             } else {
-                // 如果没有匹配的牌，选择最优的牌来说谎
-                String bestValue = findBestValueToLie(requiredValue);
-                List<Card> cardsToLie = hand.stream()
-                        .filter(card -> card.getRank().equals(bestValue))
-                        .toList();
+                // 如果有相同点数的牌，根据难度决定出牌数量
+                int maxCards = switch (difficulty) {
+                    case "EASY" -> 1;      // 简单模式最多出1张
+                    case "MEDIUM" -> 2;     // 中等模式最多出2张
+                    case "HARD" -> 3;       // 困难模式最多出3张
+                    default -> 2;
+                };
                 
-                int cardsToSelect = Math.min(1 + random.nextInt(2), cardsToLie.size());
+                int cardsToSelect = Math.min(maxCards, sameValueCards.size());
                 for (int i = 0; i < cardsToSelect; i++) {
-                    selectedCards.add(cardsToLie.get(i));
+                    selectedCards.add(sameValueCards.get(i));
                 }
             }
         }
@@ -162,41 +169,65 @@ public class RobotPlayer extends Player {
     }
 
     /**
-     * 找到最优的牌值来出牌
-     * @return 最优的牌值
+     * 找出最适合出牌的点数
      */
     private String findBestValueToPlay() {
-        String bestValue = null;
-        int maxCount = 0;
+        // 统计每个点数的牌的数量
+        Map<String, Integer> valueCount = new HashMap<>();
+        for (Card card : getHand()) {
+            valueCount.merge(card.getRank(), 1, Integer::sum);
+        }
         
-        for (Map.Entry<String, Integer> entry : cardCountMap.entrySet()) {
-            if (entry.getValue() > maxCount) {
-                maxCount = entry.getValue();
-                bestValue = entry.getKey();
+        // 根据难度选择策略
+        if (difficulty.equals("HARD")) {
+            // 困难模式优先选择数量最多的点数
+            return valueCount.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(getHand().get(0).getRank());
+        } else if (difficulty.equals("MEDIUM")) {
+            // 中等模式随机选择数量较多的点数
+            List<String> candidates = valueCount.entrySet().stream()
+                    .filter(e -> e.getValue() >= 2)
+                    .map(Map.Entry::getKey)
+                    .toList();
+            if (!candidates.isEmpty()) {
+                return candidates.get(random.nextInt(candidates.size()));
             }
         }
         
-        return bestValue != null ? bestValue : getHand().get(0).getRank();
+        // 简单模式或其他情况随机选择
+        return getHand().get(random.nextInt(getHand().size())).getRank();
     }
 
     /**
-     * 找到最优的牌值来说谎
-     * @param requiredValue 需要声明的牌值
-     * @return 最优的牌值
+     * 找出最适合说谎的点数
      */
-    private String findBestValueToLie(String requiredValue) {
-        String bestValue = null;
-        int maxCount = 0;
+    private String findBestValueToLie(String actualValue) {
+        List<String> allValues = Arrays.asList("A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K");
+        List<String> possibleValues = new ArrayList<>(allValues);
+        possibleValues.remove(actualValue);
         
-        for (Map.Entry<String, Integer> entry : cardCountMap.entrySet()) {
-            // 选择数量最多的牌来说谎
-            if (entry.getValue() > maxCount && !entry.getKey().equals(requiredValue)) {
-                maxCount = entry.getValue();
-                bestValue = entry.getKey();
+        if (difficulty.equals("HARD")) {
+            // 困难模式倾向于选择接近实际点数的值
+            int actualIndex = allValues.indexOf(actualValue);
+            List<String> nearbyValues = new ArrayList<>();
+            
+            // 选择距离实际点数2以内的值
+            for (String value : possibleValues) {
+                int index = allValues.indexOf(value);
+                if (Math.abs(index - actualIndex) <= 2) {
+                    nearbyValues.add(value);
+                }
+            }
+            
+            if (!nearbyValues.isEmpty()) {
+                return nearbyValues.get(random.nextInt(nearbyValues.size()));
             }
         }
         
-        return bestValue != null ? bestValue : getHand().get(0).getRank();
+        // 其他情况随机选择
+        return possibleValues.get(random.nextInt(possibleValues.size()));
     }
 
     /**

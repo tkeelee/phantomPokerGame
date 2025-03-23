@@ -28,6 +28,7 @@ public class PlayerService {
     
     private final GameService gameService;
     private final WebSocketService webSocketService;
+    private final AdminService adminService;
     
     /** 玩家数据缓存，用于存储玩家信息，避免频繁查询数据库 */
     private final Map<String, Player> playerCache = new HashMap<>();
@@ -42,10 +43,12 @@ public class PlayerService {
      * 构造函数
      * @param gameService 游戏服务实例
      * @param webSocketService WebSocket服务实例
+     * @param adminService 管理服务实例
      */
-    public PlayerService(GameService gameService, WebSocketService webSocketService) {
+    public PlayerService(GameService gameService, WebSocketService webSocketService, AdminService adminService) {
         this.gameService = gameService;
         this.webSocketService = webSocketService;
+        this.adminService = adminService;
     }
 
     /**
@@ -200,67 +203,71 @@ public class PlayerService {
     /**
      * 踢出玩家并清理其数据
      * @param playerId 要踢出的玩家ID
-     * @param reason 踢出原因
      * @return 操作是否成功
      */
-    public boolean kickPlayer(String playerId, String reason) {
+    public boolean kickPlayer(String playerId) {
         try {
-            logger.info("开始踢出玩家 {} - 原因: {}", playerId, reason);
+            logger.info("开始踢出玩家 {}", playerId);
             
-            // 查找玩家并检查其状态
-            Player player = getPlayer(playerId);
-            if (player == null) {
-                logger.warn("尝试踢出不存在的玩家: {}", playerId);
-                return false;
+            // 1. 获取玩家当前所在的房间（如果有）
+            String currentRoomId = null;
+            Player player = playerCache.get(playerId);
+            if (player != null) {
+                currentRoomId = player.getRoomId();
             }
             
-            // 查找玩家所在房间
-            String roomId = player.getRoomId();
-            if (roomId != null && !roomId.isEmpty()) {
+            // 2. 如果玩家在房间中，先处理房间相关的清理
+            if (currentRoomId != null) {
                 try {
-                    // 让玩家离开房间
-                    gameService.leaveRoom(roomId, playerId);
-                    logger.info("已将玩家 {} 从房间 {} 中移除", playerId, roomId);
+                    // 从房间中移除玩家
+                    gameService.leaveRoom(currentRoomId, playerId);
+                    logger.info("已将玩家 {} 从房间 {} 中移除", playerId, currentRoomId);
+                    
+                    // 广播房间状态更新
+                    webSocketService.broadcastGameState(currentRoomId);
                 } catch (Exception e) {
                     logger.error("从房间移除玩家时出错: {}", e.getMessage(), e);
                 }
             }
             
-            // 标记玩家为离线
-            player.setStatus("OFFLINE");
-            player.setRoomId(null);
-            player.setActive(false);
-            player.setLastActiveTime(Instant.now());
+            // 3. 清理玩家的所有会话
+            webSocketService.cleanupPlayerSession(playerId);
+            logger.info("已清理玩家 {} 的所有会话", playerId);
             
-            // 更新缓存
-            updatePlayerCache(player);
+            // 4. 从在线玩家列表中移除
+            removeFromActivePlayers(playerId);
+            logger.info("已从在线玩家列表移除玩家 {}", playerId);
             
-            // 如果需要，添加到黑名单
-            if (reason != null && reason.equals("BAN")) {
-                banPlayer(playerId, 10); // 默认禁用10秒
-            }
+            // 5. 从玩家缓存中移除
+            playerCache.remove(playerId);
+            logger.info("已从玩家缓存中移除玩家 {}", playerId);
             
-            // 通知客户端被踢出
+            // 6. 将玩家加入临时黑名单（10秒）
+            banPlayer(playerId, 10);
+            logger.info("已将玩家 {} 加入临时黑名单", playerId);
+            
+            // 7. 发送强制下线通知
             Map<String, Object> notification = new HashMap<>();
             notification.put("type", "FORCE_LOGOUT");
-            notification.put("playerId", playerId);
-            notification.put("message", "您已被管理员强制登出");
-            notification.put("reason", reason);
+            notification.put("message", "您已被管理员踢出游戏");
+            notification.put("reason", "ADMIN_KICK");
             notification.put("timestamp", System.currentTimeMillis());
             
             try {
-                // 发送WebSocket通知
                 webSocketService.sendNotification(playerId, notification);
                 logger.info("已发送踢出通知给玩家 {}", playerId);
             } catch (Exception e) {
                 logger.error("发送踢出通知时出错: {}", e.getMessage(), e);
             }
             
-            // 广播玩家状态更新
+            // 8. 广播玩家状态更新到所有客户端
             broadcastPlayerStatusUpdate();
             
-            // 从在线玩家列表中彻底移除
-            removeFromActivePlayers(playerId);
+            // 9. 强制触发客户端刷新
+            Map<String, Object> refreshNotification = new HashMap<>();
+            refreshNotification.put("type", "FORCE_REFRESH");
+            refreshNotification.put("timestamp", System.currentTimeMillis());
+            webSocketService.broadcastPlayerStatusUpdate(getAllPlayers());
             
             return true;
         } catch (Exception e) {
@@ -270,15 +277,47 @@ public class PlayerService {
     }
 
     /**
-     * 从活跃玩家列表中彻底移除玩家
-     * @param playerId 玩家ID
+     * 从活跃玩家列表中移除玩家
      */
     private void removeFromActivePlayers(String playerId) {
-        // 根据实际存储方式实现
-        // 例如，从内存中的活跃玩家Map中移除
-        activePlayers.remove(playerId);
-        
-        // 如果使用数据库，可能还需要更新数据库记录
+        try {
+            // 1. 从活跃玩家Map中移除
+            Player player = activePlayers.remove(playerId);
+            if (player != null) {
+                logger.info("已从活跃玩家列表移除玩家: {}", playerId);
+                
+                // 2. 通知WebSocket服务
+                webSocketService.notifyPlayerOffline(playerId);
+                
+                // 3. 通知管理服务将玩家标记为离线
+                adminService.markPlayerOffline(playerId);
+                
+                // 4. 清理玩家相关的所有数据
+                cleanupPlayerData(playerId);
+            }
+        } catch (Exception e) {
+            logger.error("移除玩家时出错: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 清理玩家相关的所有数据
+     */
+    private void cleanupPlayerData(String playerId) {
+        try {
+            // 1. 清理玩家的游戏状态
+            gameService.cleanupPlayerGameState(playerId);
+            
+            // 2. 清理玩家的房间关联
+            gameService.removePlayerFromAllRooms(playerId);
+            
+            // 3. 清理玩家的WebSocket会话
+            webSocketService.cleanupPlayerSession(playerId);
+            
+            logger.info("已清理玩家 {} 的所有相关数据", playerId);
+        } catch (Exception e) {
+            logger.error("清理玩家数据时出错: {}", e.getMessage(), e);
+        }
     }
 
     /**

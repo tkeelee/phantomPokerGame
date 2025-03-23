@@ -1,319 +1,188 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-    <title>幻影扑克 - 房间大厅</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/common.css"/>
-    <link rel="stylesheet" href="css/game-theme.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏大厅 - 幻影扑克</title>
+    
+    <!-- 引入Bootstrap CSS -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入Layer CSS -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/layer/3.5.1/theme/default/layer.min.css" rel="stylesheet">
+    
     <style>
-        /* 全局游戏风格 */
-        body.lobby-page {
-            background-color: #1a2233; /* 暗蓝色背景 */
-            color: #e9ecef;
-            padding: 20px;
-        }
-
-        .lobby-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        /* 顶部栏 */
-        .lobby-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 15px 20px;
-            background-color: rgba(24, 36, 60, 0.8);
-            border-radius: 8px;
-            border: 1px solid rgba(80, 120, 200, 0.4);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        body {
+            background-color: #121a2b;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px 0;
         }
         
-        .lobby-header h1 {
-            color: #fff;
-            font-size: 24px;
-            margin: 0;
-            text-shadow: 0 0 10px rgba(100, 150, 255, 0.5);
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
         }
-
-        /* 主内容区 */
-        .lobby-content {
-            display: flex;
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 3fr 1fr;
             gap: 20px;
+            padding: 0 20px;
         }
-
-        /* 房间列表区域 */
-        .room-list-section {
-            flex: 3;
-            background-color: rgba(30, 45, 75, 0.7);
+        
+        @media (max-width: 992px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .player-list-container,
+        .room-list-container,
+        .chat-container {
+            background-color: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
-            border: 1px solid rgba(80, 120, 200, 0.4);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
             padding: 15px;
-            margin-bottom: 20px;
+            height: fit-content;
         }
-
-        /* 玩家列表区域 */
-        .player-list-section {
-            flex: 1;
-            background-color: rgba(30, 45, 75, 0.7);
-            border-radius: 8px;
-            border: 1px solid rgba(80, 120, 200, 0.4);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        /* 区域标题 */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        
+        .section-title {
+            color: #ffffff;
+            font-size: 1.2rem;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(80, 120, 200, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .section-header h2 {
-            color: #a8c7ff;
-            font-size: 18px;
-            margin: 0;
-            font-weight: 600;
+        
+        .room-actions {
+            margin-bottom: 15px;
         }
-
-        /* 玩家列表样式 */
-        .player-list {
-            max-height: 400px;
-            overflow-y: auto;
-            padding: 10px;
-            background-color: rgba(24, 36, 60, 0.3);
-            border-radius: 5px;
-        }
-
+        
+        .room-item,
         .player-item {
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border-radius: 5px;
-            background-color: rgba(30, 36, 54, 0.7);
-            transition: all 0.2s ease;
-            border-left: 3px solid rgba(80, 120, 200, 0.6);
-        }
-        
-        .player-item:hover {
-            background-color: rgba(40, 50, 80, 0.8);
-        }
-
-        .player-item.current-player {
-            background-color: rgba(13, 110, 253, 0.2);
-            border-left: 3px solid #0d6efd;
-        }
-
-        /* 房间列表样式 */
-        .room-list {
-            max-height: 500px;
-            overflow-y: auto;
-            padding: 10px;
-            background-color: rgba(24, 36, 60, 0.3);
-            border-radius: 5px;
-        }
-
-        .room-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            background-color: rgba(30, 36, 54, 0.7);
-            border-radius: 5px;
-            border-left: 3px solid rgba(80, 120, 200, 0.6);
-            transition: all 0.2s ease;
-        }
-
-        .room-item:hover {
-            background-color: rgba(40, 50, 80, 0.8);
-        }
-
-        .room-info {
-            flex: 1;
-        }
-
-        .room-info h5 {
-            color: #e9ecef;
-            margin: 0 0 5px 0;
-            font-weight: 600;
-        }
-
-        .room-info small {
-            color: #adb5bd;
-        }
-
-        /* 按钮统一样式 */
-        .btn {
-            color: white;
-            font-weight: 500;
-            border: none;
-            padding: 8px 16px;
+            background-color: rgba(255, 255, 255, 0.1);
             border-radius: 4px;
-            transition: all 0.2s ease;
+            margin-bottom: 10px;
+            padding: 10px;
+            transition: all 0.3s ease;
         }
-
+        
+        .room-item:hover,
+        .player-item:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex-grow: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: #007bff;
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        
         .btn-primary {
-            background-color: #0d6efd;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-        }
-
-        .btn-success {
-            background-color: #198754;
-        }
-
-        .btn-danger {
-            background-color: #dc3545;
-        }
-
-        .btn-warning {
-            background-color: #fd7e14;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .btn:active {
-            transform: translateY(1px);
-        }
-
-        /* 加载指示器 */
-        #loadingIndicator {
-            color: #a8c7ff;
-        }
-
-        /* 表单控件 */
-        .form-control, .form-select {
-            background-color: rgba(15, 25, 45, 0.8);
-            border: 1px solid rgba(80, 120, 200, 0.4);
-            color: #e9ecef;
+            background-color: #007bff;
+            border: none;
         }
         
-        .form-control:focus, .form-select:focus {
-            background-color: rgba(20, 35, 60, 0.9);
-            border-color: rgba(100, 150, 255, 0.6);
-            color: white;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        .btn-primary:hover {
+            background-color: #0056b3;
         }
         
-        /* 标签 */
-        .form-label {
-            color: #adb5bd;
-            font-size: 14px;
-            margin-bottom: 4px;
+        .badge {
+            font-size: 0.8rem;
+            padding: 5px 8px;
         }
-
-        /* 响应式布局 */
-        @media (max-width: 768px) {
-            .lobby-content {
-                flex-direction: column;
-            }
-            
-            .room-list-section, .player-list-section {
-                width: 100%;
-            }
+        
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
     </style>
-    <script src="plugins/jQuery/jquery-1.8.3.min.js"></script>
-    <script src="plugins/placeholder/placeholder.js"></script>
-    <script src="plugins/layer/layer.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 </head>
-<body class="lobby-page">
-    <div class="lobby-container">
-        <div class="lobby-header">
-            <h1>幻影扑克</h1>
-            <div class="user-info">
-                <span id="playerName" class="me-3"></span>
-                <button onclick="logout()" class="btn btn-danger">退出</button>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">幻影扑克</a>
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3">欢迎, <span id="playerName">游客</span></span>
+                <button class="btn btn-outline-light btn-sm" onclick="logout()">退出</button>
             </div>
+        </div>
+    </nav>
+    
+    <!-- 主要内容区域 -->
+    <div class="main-container">
+        <!-- 玩家列表 -->
+        <div class="player-list-container">
+            <h3 class="section-title">在线玩家</h3>
+            <div id="playerList"></div>
         </div>
         
-        <div class="lobby-content">
-            <div class="room-list-section">
-                <div class="section-header">
-                    <h2>房间列表</h2>
-                    <div>
-                        <button id="refreshRoomsBtn" class="btn btn-info me-2" onclick="loadRoomList()">刷新</button>
-                        <button id="createRoomBtn" class="btn btn-primary" onclick="showCreateRoomModal()">创建房间</button>
-                    </div>
-                </div>
-                
-                <!-- 房主控制面板 -->
-                <div id="hostActions" class="host-actions mb-4" style="display: none;">
-                    <div class="d-flex align-items-center flex-wrap">
-                        <button class="btn btn-outline-primary me-2" onclick="startGame()">开始游戏</button>
-                        <button class="btn btn-outline-info me-2" onclick="addRobots()">添加机器人</button>
-                        <button class="btn btn-outline-warning" onclick="removeRobots()">移除机器人</button>
-                    </div>
-                </div>
-                
-                <div id="roomList" class="room-list">
-                    <div id="loadingIndicator" class="text-center p-4">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">加载中...</span>
-                        </div>
-                        <p class="mt-2 text-light">正在连接服务器...</p>
-                    </div>
-                </div>
+        <!-- 房间列表 -->
+        <div class="room-list-container">
+            <h3 class="section-title">游戏房间</h3>
+            <div class="room-actions">
+                <button id="createRoomBtn" class="btn btn-primary me-2" onclick="createRoom()">创建房间</button>
+                <button id="refreshRoomsBtn" class="btn btn-outline-light" onclick="loadRoomList()">刷新列表</button>
             </div>
-            
-            <div class="player-list-section">
-                <div class="section-header">
-                    <h2>在线玩家</h2>
-                </div>
-                <div id="playerList" class="player-list"></div>
+            <div id="roomList"></div>
+        </div>
+        
+        <!-- 聊天区域 -->
+        <div class="chat-container">
+            <h3 class="section-title">聊天室</h3>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" class="chat-input" placeholder="输入消息...">
+                <button class="btn btn-primary" onclick="sendMessage()">发送</button>
             </div>
         </div>
     </div>
-
-    <!-- 创建房间模态框 -->
-    <div class="modal fade" id="createRoomModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content" style="background-color: #1e2d4b; color: #e9ecef; border: 1px solid rgba(80, 120, 200, 0.4);">
-                <div class="modal-header" style="border-bottom: 1px solid rgba(80, 120, 200, 0.4);">
-                    <h5 class="modal-title" style="color: #a8c7ff;">创建房间</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">房间名称</label>
-                        <input type="text" id="roomName" class="form-control" placeholder="请输入房间名称">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">最大玩家数</label>
-                        <select id="maxPlayers" class="form-select">
-                            <option value="2">2人</option>
-                            <option value="3">3人</option>
-                            <option value="4">4人</option>
-                            <option value="6">6人</option>
-                            <option value="8">8人</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer" style="border-top: 1px solid rgba(80, 120, 200, 0.4);">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button onclick="createRoom()" class="btn btn-primary">创建</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 引入必要的JavaScript库 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/layer/3.5.1/layer.min.js"></script>
+    
+    <!-- 引入游戏大厅的JavaScript逻辑 -->
     <script src="js/lobby.js"></script>
 </body>
 </html> 

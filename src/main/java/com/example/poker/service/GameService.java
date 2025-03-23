@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.stream.Collectors;
 
 /**
  * 游戏服务类，负责处理游戏的主要逻辑
@@ -818,8 +819,24 @@ public class GameService {
 
         room.removeAllRobots();
         
-        // 广播房间状态更新
-        broadcastRoomState(room);
+        // 检查房间是否需要解散
+        if (room.getPlayers().isEmpty() || room.getPlayers().stream().allMatch(room::isRobot)) {
+            // 如果房间内只剩下机器人或没有玩家，解散房间
+            rooms.remove(roomId);
+            gameStates.remove(roomId);
+            
+            // 广播房间解散消息
+            if (messagingTemplate != null) {
+                GameNotification notification = new GameNotification();
+                notification.setType("ROOM_DISSOLVED");
+                notification.setContent("房间已解散");
+                notification.setRoomId(roomId);
+                messagingTemplate.convertAndSend("/topic/game/notification/" + roomId, notification);
+            }
+        } else {
+            // 广播房间状态更新
+            broadcastRoomState(room);
+        }
     }
 
     /**
@@ -955,9 +972,50 @@ public class GameService {
      * @param room 游戏房间
      */
     private void broadcastRoomState(GameRoom room) {
-        if (messagingTemplate != null) {
-            messagingTemplate.convertAndSend("/topic/room/" + room.getId(), room);
-        }
+        if (messagingTemplate == null) return;
+        
+        // 获取游戏状态
+        GameState state = gameStates.get(room.getId());
+        if (state == null) return;
+        
+        // 更新状态中的机器人信息
+        state.setRobotCount(room.getRobotCount());
+        
+        // 广播更新
+        messagingTemplate.convertAndSend("/topic/game/state/" + room.getId(), state);
+        
+        // 广播房间列表更新（不包含机器人信息）
+        List<GameRoom> publicRooms = rooms.values().stream()
+                .map(this::createPublicRoomView)
+                .toList();
+        messagingTemplate.convertAndSend("/topic/rooms", publicRooms);
+    }
+
+    /**
+     * 创建房间的公开视图（不包含机器人信息）
+     * @param room 原始房间
+     * @return 公开视图
+     */
+    private GameRoom createPublicRoomView(GameRoom room) {
+        GameRoom publicView = new GameRoom();
+        publicView.setId(room.getId());
+        publicView.setHostId(room.getHostId());
+        publicView.setMaxPlayers(room.getMaxPlayers());
+        publicView.setStatus(room.getStatus());
+        
+        // 只包含非机器人玩家
+        List<String> humanPlayers = room.getPlayers().stream()
+                .filter(p -> !room.isRobot(p))
+                .toList();
+        publicView.setPlayers(new ArrayList<>(humanPlayers));
+        
+        // 设置准备状态
+        List<String> readyHumanPlayers = room.getReadyPlayers().stream()
+                .filter(p -> !room.isRobot(p))
+                .toList();
+        publicView.setReadyPlayers(new ArrayList<>(readyHumanPlayers));
+        
+        return publicView;
     }
 
     /**
@@ -1014,5 +1072,114 @@ public class GameService {
         
         // 更新机器人计数
         state.setRobotCount(room.getRobotCount());
+    }
+
+    /**
+     * 从所有房间中移除指定玩家
+     * @param playerId 要移除的玩家ID
+     */
+    public void removePlayerFromAllRooms(String playerId) {
+        List<GameRoom> playerRooms = getAllRooms().stream()
+            .filter(room -> room.getPlayers().contains(playerId))
+            .collect(Collectors.toList());
+            
+        for (GameRoom room : playerRooms) {
+            try {
+                leaveRoom(room.getId(), playerId);
+                log.info("已将玩家 {} 从房间 {} 中移除", playerId, room.getId());
+            } catch (Exception e) {
+                log.error("从房间 {} 移除玩家 {} 时出错: {}", room.getId(), playerId, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 清理玩家的游戏状态
+     * @param playerId 玩家ID
+     */
+    public void cleanupPlayerGameState(String playerId) {
+        try {
+            // 从所有房间中移除玩家
+            removePlayerFromAllRooms(playerId);
+            
+            // 清理玩家的游戏状态
+            for (GameState state : gameStates.values()) {
+                if (state.getPlayers().contains(playerId)) {
+                    state.getPlayers().remove(playerId);
+                    state.getPlayerHands().remove(playerId);
+                    state.getReadyPlayers().remove(playerId);
+                    
+                    // 如果是当前玩家，更新为下一个玩家
+                    if (playerId.equals(state.getCurrentPlayer())) {
+                        List<String> players = state.getPlayers();
+                        if (!players.isEmpty()) {
+                            int nextIndex = (players.indexOf(state.getCurrentPlayer()) + 1) % players.size();
+                            state.setCurrentPlayer(players.get(nextIndex));
+                        }
+                    }
+                }
+            }
+            
+            log.info("已清理玩家 {} 的游戏状态", playerId);
+        } catch (Exception e) {
+            log.error("清理玩家游戏状态时出错: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 处理玩家退出房间
+     * @param roomId 房间ID
+     * @param playerId 玩家ID
+     */
+    public void handlePlayerExit(String roomId, String playerId) {
+        GameRoom room = rooms.get(roomId);
+        if (room == null) return;
+
+        room.handlePlayerExit(playerId);
+        
+        // 如果是房主退出，且房间还有其他玩家，转移房主权限
+        if (playerId.equals(room.getHostId()) && !room.getPlayers().isEmpty()) {
+            // 找到第一个非机器人玩家作为新房主
+            String newHost = room.getPlayers().stream()
+                    .filter(p -> !room.isRobot(p))
+                    .findFirst()
+                    .orElse(null);
+            
+            if (newHost != null) {
+                room.setHostId(newHost);
+            } else {
+                // 如果没有非机器人玩家，解散房间
+                rooms.remove(roomId);
+                gameStates.remove(roomId);
+                
+                // 广播房间解散消息
+                if (messagingTemplate != null) {
+                    GameNotification notification = new GameNotification();
+                    notification.setType("ROOM_DISSOLVED");
+                    notification.setContent("房间已解散");
+                    notification.setRoomId(roomId);
+                    messagingTemplate.convertAndSend("/topic/game/notification/" + roomId, notification);
+                }
+                return;
+            }
+        }
+        
+        // 检查房间是否需要解散
+        if (room.getPlayers().isEmpty() || room.getPlayers().stream().allMatch(room::isRobot)) {
+            rooms.remove(roomId);
+            gameStates.remove(roomId);
+            
+            // 广播房间解散消息
+            if (messagingTemplate != null) {
+                GameNotification notification = new GameNotification();
+                notification.setType("ROOM_DISSOLVED");
+                notification.setContent("房间已解散");
+                notification.setRoomId(roomId);
+                messagingTemplate.convertAndSend("/topic/game/notification/" + roomId, notification);
+            }
+        } else {
+            // 广播房间状态更新
+            broadcastRoomState(room);
+        }
     }
 }

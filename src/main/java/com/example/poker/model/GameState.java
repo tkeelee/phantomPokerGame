@@ -47,6 +47,8 @@ public class GameState {
     private List<Card> lastChallengePile;
     private Map<String, List<Card>> lastChallengeHands;
 
+    private List<String> readyPlayers = new ArrayList<>();
+
     public GameState() {
         this.players = new ArrayList<>();
         this.playerHands = new HashMap<>();
@@ -369,5 +371,13 @@ public class GameState {
 
     public void setRobotCount(int robotCount) {
         this.robotCount = robotCount;
+    }
+
+    public List<String> getReadyPlayers() {
+        return readyPlayers;
+    }
+
+    public void setReadyPlayers(List<String> readyPlayers) {
+        this.readyPlayers = readyPlayers;
     }
 }
