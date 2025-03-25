@@ -5,14 +5,13 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.beans.factory.annotation.Autowired;
-import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 import com.example.poker.service.AdminService;
 import com.example.poker.model.Player;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
-import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.Instant;
@@ -24,9 +23,9 @@ public class WebSocketController {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
-    
+
     @Autowired
-    private GameService gameService;
+    private RoomManagementService roomManagementService;
 
     @Autowired
     private AdminService adminService;
@@ -76,7 +75,7 @@ public class WebSocketController {
             // 同步到GameService
             try {
                 log.info("同步房间信息到GameService");
-                gameService.createRoomWithId(room.getId(), request.getHostId(), request.getMaxPlayers(), room.getName());
+                roomManagementService.createRoomWithId(room.getId(), request.getHostId(), request.getMaxPlayers(), room.getName());
                 log.info("房间同步成功");
             } catch (Exception e) {
                 log.error("同步房间到GameService失败: " + e.getMessage());
@@ -325,7 +324,7 @@ public class WebSocketController {
         
         // 同步到游戏服务
         try {
-            gameService.leaveRoom(roomId, playerId);
+            roomManagementService.leaveRoom(roomId, playerId);
         } catch (Exception e) {
             log.error("同步玩家离开房间到GameService失败: " + e.getMessage());
         }
@@ -350,10 +349,6 @@ public class WebSocketController {
      */
     public List<PlayerInfo> getOnlinePlayersForBroadcast() {
         return new ArrayList<>(onlinePlayers.values());
-    }
-
-    private String generateRoomId() {
-        return "room_" + System.currentTimeMillis();
     }
 
     // 内部类定义

@@ -1,7 +1,7 @@
 package com.example.poker.controller;
 
 import com.example.poker.model.*;
-import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +20,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class GameWebSocketControllerTest {
 
     @Autowired
-    private GameService gameService;
+    private RoomManagementService roomManagementService;
+
 
     private WebSocketStompClient stompClient;
     private CompletableFuture<GameState> gameStateFuture;
@@ -32,9 +33,9 @@ class GameWebSocketControllerTest {
     void setUp() {
         player1Id = "player1";
         player2Id = "player2";
-        GameRoom room = gameService.createRoom(player1Id, 2);
+        GameRoom room = roomManagementService.createRoom(player1Id, 2);
         roomId = room.getId();
-        gameService.joinRoom(roomId, player2Id);
+        roomManagementService.joinRoom(roomId, player2Id);
 
         stompClient = new WebSocketStompClient(new StandardWebSocketClient());
         gameStateFuture = new CompletableFuture<>();

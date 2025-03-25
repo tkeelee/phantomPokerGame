@@ -16,6 +16,9 @@ class GameServiceTest {
     @Autowired
     private GameService gameService;
 
+    @Autowired
+    private RoomManagementService roomManagementService;
+
     private String roomId;
     private String player1Id;
     private String player2Id;
@@ -24,14 +27,14 @@ class GameServiceTest {
     void setUp() {
         player1Id = "player1";
         player2Id = "player2";
-        GameRoom room = gameService.createRoom(player1Id, 2);
+        GameRoom room = roomManagementService.createRoom(player1Id, 2);
         roomId = room.getId();
-        gameService.joinRoom(roomId, player2Id);
+        roomManagementService.joinRoom(roomId, player2Id);
     }
 
     @Test
     void testCreateRoom() {
-        GameRoom room = gameService.createRoom("host", 2);
+        GameRoom room = roomManagementService.createRoom("host", 2);
         assertNotNull(room);
         assertNotNull(room.getId());
         assertEquals("host", room.getHostId());
@@ -41,15 +44,15 @@ class GameServiceTest {
 
     @Test
     void testJoinRoom() {
-        GameRoom room = gameService.joinRoom(roomId, "player3");
+        GameRoom room = roomManagementService.joinRoom(roomId, "player3");
         assertNotNull(room);
         assertTrue(room.getPlayers().contains("player3"));
     }
 
     @Test
     void testLeaveRoom() {
-        gameService.leaveRoom(roomId, player2Id);
-        GameRoom room = gameService.getRoom(roomId);
+        roomManagementService.leaveRoom(roomId, player2Id);
+        GameRoom room = roomManagementService.getRoom(roomId);
         assertFalse(room.getPlayers().contains(player2Id));
     }
 
@@ -98,14 +101,14 @@ class GameServiceTest {
 
     @Test
     void testGetRoom() {
-        GameRoom room = gameService.getRoom(roomId);
+        GameRoom room = roomManagementService.getRoom(roomId);
         assertNotNull(room);
         assertEquals(roomId, room.getId());
     }
 
     @Test
     void testGetGameState() {
-        GameState state = gameService.getGameState(roomId);
+        GameState state = roomManagementService.getGameState(roomId);
         assertNotNull(state);
         assertEquals(roomId, state.getRoomId());
     }

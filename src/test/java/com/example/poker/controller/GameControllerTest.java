@@ -1,7 +1,7 @@
 package com.example.poker.controller;
 
 import com.example.poker.model.*;
-import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class GameControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private GameService gameService;
+    private RoomManagementService roomManagementService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -38,9 +38,9 @@ class GameControllerTest {
     void setUp() {
         player1Id = "player1";
         player2Id = "player2";
-        GameRoom room = gameService.createRoom(player1Id, 2);
+        GameRoom room = roomManagementService.createRoom(player1Id, 2);
         roomId = room.getId();
-        gameService.joinRoom(roomId, player2Id);
+        roomManagementService.joinRoom(roomId, player2Id);
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.example.poker.controller;
 import com.example.poker.model.GameRoom;
 import com.example.poker.model.GameState;
 import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -16,10 +17,12 @@ import java.util.UUID;
 public class RoomController {
 
     private final GameService gameService;
+    private final RoomManagementService roomManagementService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public RoomController(GameService gameService, SimpMessagingTemplate messagingTemplate) {
+    public RoomController(GameService gameService, RoomManagementService roomManagementService,SimpMessagingTemplate messagingTemplate) {
         this.gameService = gameService;
+        this.roomManagementService = roomManagementService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -35,7 +38,7 @@ public class RoomController {
                                        @RequestParam(defaultValue = "1") int count,
                                        @RequestParam(defaultValue = "MEDIUM") String difficulty) {
         try {
-            GameRoom room = gameService.getRoom(roomId);
+            GameRoom room = roomManagementService.getRoom(roomId);
             
             // 检查用户是否是房主
             String currentPlayerId = getUserId();
@@ -51,7 +54,7 @@ public class RoomController {
             gameService.updateRobotInfo(roomId);
             
             // 获取更新后的游戏状态
-            GameState state = gameService.getGameState(roomId);
+            GameState state = roomManagementService.getGameState(roomId);
             
             // 广播更新
             messagingTemplate.convertAndSend("/topic/room/" + roomId, room);
@@ -75,7 +78,7 @@ public class RoomController {
     @DeleteMapping("/{roomId}/robots")
     public ResponseEntity<?> removeRobots(@PathVariable String roomId) {
         try {
-            GameRoom room = gameService.getRoom(roomId);
+            GameRoom room = roomManagementService.getRoom(roomId);
             
             // 检查用户是否是房主
             String currentPlayerId = getUserId();
@@ -92,7 +95,7 @@ public class RoomController {
             gameService.updateRobotInfo(roomId);
             
             // 获取更新后的游戏状态
-            GameState state = gameService.getGameState(roomId);
+            GameState state = roomManagementService.getGameState(roomId);
             
             // 广播更新
             messagingTemplate.convertAndSend("/topic/room/" + roomId, room);

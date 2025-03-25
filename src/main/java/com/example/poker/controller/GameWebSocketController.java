@@ -2,6 +2,7 @@ package com.example.poker.controller;
 
 import com.example.poker.model.*;
 import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -20,6 +21,9 @@ public class GameWebSocketController {
     
     @Autowired
     private GameService gameService;
+
+    @Autowired
+    private RoomManagementService roomManagementService;
     
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
@@ -87,7 +91,7 @@ public class GameWebSocketController {
             gameService.playCards(message.getRoomId(), message);
             
             // 发送游戏状态更新
-            GameState state = gameService.getGameState(message.getRoomId());
+            GameState state = roomManagementService.getGameState(message.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
             
             // 发送出牌通知
@@ -98,7 +102,7 @@ public class GameWebSocketController {
             messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
             
             // 检查游戏是否结束
-            GameRoom room = gameService.getRoom(message.getRoomId());
+            GameRoom room = roomManagementService.getRoom(message.getRoomId());
             if (room.getStatus() == GameStatus.FINISHED) {
                 // 游戏结束，发送结束通知
                 GameNotification endNotification = new GameNotification();
@@ -131,7 +135,7 @@ public class GameWebSocketController {
             gameService.pass(message.getRoomId(), message.getPlayerId());
             
             // 发送游戏状态更新
-            GameState state = gameService.getGameState(message.getRoomId());
+            GameState state = roomManagementService.getGameState(message.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
             
             // 发送过牌通知
@@ -155,7 +159,7 @@ public class GameWebSocketController {
             gameService.challenge(message.getRoomId(), message);
             
             // 发送游戏状态更新
-            GameState state = gameService.getGameState(message.getRoomId());
+            GameState state = roomManagementService.getGameState(message.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
             
             // 发送质疑通知
@@ -166,7 +170,7 @@ public class GameWebSocketController {
             messagingTemplate.convertAndSend("/topic/game/notification/" + message.getRoomId(), notification);
             
             // 检查游戏是否结束
-            GameRoom room = gameService.getRoom(message.getRoomId());
+            GameRoom room = roomManagementService.getRoom(message.getRoomId());
             if (room.getStatus() == GameStatus.FINISHED) {
                 // 游戏结束，发送结束通知
                 GameNotification endNotification = new GameNotification();
@@ -195,10 +199,10 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handleJoinRoom(GameMessage message) {
-        gameService.joinRoom(message.getRoomId(), message.getPlayerId());
+        roomManagementService.joinRoom(message.getRoomId(), message.getPlayerId());
         
         // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
+        GameState state = roomManagementService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
         
         // 发送加入通知
@@ -218,7 +222,7 @@ public class GameWebSocketController {
         gameService.playerReady(message.getRoomId(), message.getPlayerId());
         
         // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
+        GameState state = roomManagementService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
         
         // 发送准备通知
@@ -238,7 +242,7 @@ public class GameWebSocketController {
         gameService.startGame(message.getRoomId(), message.getPlayerId(), deckCount);
         
         // 发送游戏状态更新
-        GameState state = gameService.getGameState(message.getRoomId());
+        GameState state = roomManagementService.getGameState(message.getRoomId());
         messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
         
         // 发送开始游戏通知
@@ -254,11 +258,11 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handleLeaveRoom(GameMessage message) {
-        gameService.leaveRoom(message.getRoomId(), message.getPlayerId());
+        roomManagementService.leaveRoom(message.getRoomId(), message.getPlayerId());
         
         // 如果房间还存在，发送游戏状态更新
         try {
-            GameState state = gameService.getGameState(message.getRoomId());
+            GameState state = roomManagementService.getGameState(message.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + message.getRoomId(), state);
             
             // 发送离开通知
@@ -313,7 +317,7 @@ public class GameWebSocketController {
             gameService.addRobotsToRoom(request.getRoomId(), request.getCount(), request.getDifficulty(), request.getPlayerId());
             
             // 发送游戏状态更新
-            GameState state = gameService.getGameState(request.getRoomId());
+            GameState state = roomManagementService.getGameState(request.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + request.getRoomId(), state);
             
             // 发送添加机器人通知
@@ -346,7 +350,7 @@ public class GameWebSocketController {
             gameService.removeRobotsFromRoom(request.getRoomId(), request.getPlayerId());
             
             // 发送游戏状态更新
-            GameState state = gameService.getGameState(request.getRoomId());
+            GameState state = roomManagementService.getGameState(request.getRoomId());
             messagingTemplate.convertAndSend("/topic/game/state/" + request.getRoomId(), state);
             
             // 发送移除机器人通知

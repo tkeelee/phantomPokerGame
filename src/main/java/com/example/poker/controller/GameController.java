@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.poker.model.*;
 import com.example.poker.service.GameService;
+import com.example.poker.service.RoomManagementService;
 
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,9 @@ public class GameController {
     @Autowired
     private GameService gameService;
 
+    @Autowired
+    private RoomManagementService roomManagementService;
+
     /**
      * 创建游戏房间
      * @param request 包含房主ID和最大玩家数的请求
@@ -29,7 +33,7 @@ public class GameController {
     public ResponseEntity<GameRoom> createRoom(@RequestBody Map<String, Object> request) {
         String hostId = (String) request.get("hostId");
         int maxPlayers = Integer.parseInt(request.get("maxPlayers").toString());
-        return ResponseEntity.ok(gameService.createRoom(hostId, maxPlayers));
+        return ResponseEntity.ok(roomManagementService.createRoom(hostId, maxPlayers));
     }
 
     /**
@@ -41,7 +45,7 @@ public class GameController {
     @PostMapping("/room/{roomId}/join")
     public ResponseEntity<GameRoom> joinRoom(@PathVariable String roomId, @RequestBody Map<String, String> request) {
         String playerId = request.get("playerId");
-        return ResponseEntity.ok(gameService.joinRoom(roomId, playerId));
+        return ResponseEntity.ok(roomManagementService.joinRoom(roomId, playerId));
     }
 
     /**
@@ -53,7 +57,7 @@ public class GameController {
     @PostMapping("/room/{roomId}/leave")
     public ResponseEntity<Void> leaveRoom(@PathVariable String roomId, @RequestBody Map<String, String> request) {
         String playerId = request.get("playerId");
-        gameService.leaveRoom(roomId, playerId);
+        roomManagementService.leaveRoom(roomId, playerId);
         return ResponseEntity.ok().build();
     }
 
@@ -125,7 +129,7 @@ public class GameController {
      */
     @GetMapping("/room/{roomId}")
     public ResponseEntity<GameRoom> getRoom(@PathVariable String roomId) {
-        return ResponseEntity.ok(gameService.getRoom(roomId));
+        return ResponseEntity.ok(roomManagementService.getRoom(roomId));
     }
 
     /**
@@ -135,7 +139,7 @@ public class GameController {
      */
     @GetMapping("/room/{roomId}/state")
     public ResponseEntity<GameState> getGameState(@PathVariable String roomId) {
-        return ResponseEntity.ok(gameService.getGameState(roomId));
+        return ResponseEntity.ok(roomManagementService.getGameState(roomId));
     }
 
     /**
@@ -154,6 +158,6 @@ public class GameController {
      */
     @GetMapping("/rooms")
     public ResponseEntity<List<GameRoom>> getAllRooms() {
-        return ResponseEntity.ok(gameService.getAllRooms());
+        return ResponseEntity.ok(roomManagementService.getAllRooms());
     }
 }

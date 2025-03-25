@@ -16,7 +16,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 
 /**
@@ -44,10 +43,9 @@ import javax.annotation.PostConstruct;
 public class AdminService {
     
     private static final Instant START_TIME = Instant.now();
-    private static final String VERSION = "1.0.0";
     
     private final Map<String, Player> playerCache = new ConcurrentHashMap<>();
-    private final GameService gameService;
+    private final RoomManagementService roomManagementService;
     private final SimpMessagingTemplate messagingTemplate;
     private final ScheduledExecutorService scheduledExecutorService;
     
@@ -82,7 +80,7 @@ public class AdminService {
      */
     public List<Room> getAllRooms() {
         // 从GameService获取GameRoom列表并转换为Room列表
-        List<GameRoom> gameRooms = gameService.getAllRooms();
+        List<GameRoom> gameRooms = roomManagementService.getAllRooms();
         List<Room> rooms = new ArrayList<>();
         
         for (GameRoom gameRoom : gameRooms) {
@@ -110,7 +108,7 @@ public class AdminService {
         room.setId(gameRoom.getId());
         
         // 从GameState获取房间名称
-        GameState state = gameService.getGameState(gameRoom.getId());
+        GameState state = roomManagementService.getGameState(gameRoom.getId());
         String roomName = "房间 " + gameRoom.getId();
         if (state != null && state.getRoomName() != null && !state.getRoomName().isEmpty()) {
             roomName = state.getRoomName();
@@ -160,7 +158,7 @@ public class AdminService {
     private void updatePlayerCache() {
         try {
             // 获取所有游戏房间中的玩家
-            List<GameRoom> gameRooms = gameService.getAllRooms();
+            List<GameRoom> gameRooms = roomManagementService.getAllRooms();
             Set<String> activePlayerIds = new HashSet<>();
             
             // 更新房间中的玩家状态
@@ -259,7 +257,7 @@ public class AdminService {
         return AdminSystemInfo.builder()
             .startTime(START_TIME)
             .connectionCount(getActiveConnectionCount())
-            .roomCount(gameService.getAllRooms().size())
+            .roomCount(roomManagementService.getAllRooms().size())
             .playerCount(playerCache.size())
             .build();
     }
@@ -311,7 +309,7 @@ public class AdminService {
         }
         
         // 检查房间是否存在
-        GameRoom room = gameService.getRoom(roomId);
+        GameRoom room = roomManagementService.getRoom(roomId);
         if (room == null) {
             throw new IllegalArgumentException("房间不存在: " + roomId);
         }
@@ -329,7 +327,7 @@ public class AdminService {
                         ));
                 
                 // 将玩家从房间中移除
-                gameService.leaveRoom(roomId, playerId);
+                roomManagementService.leaveRoom(roomId, playerId);
                 
                 // 更新玩家缓存中的状态
                 if (playerCache.containsKey(playerId)) {
@@ -340,7 +338,7 @@ public class AdminService {
             }
             
             // 从gameService中移除房间
-            boolean roomRemoved = gameService.removeRoom(roomId);
+            boolean roomRemoved = roomManagementService.removeRoom(roomId);
             if (roomRemoved) {
                 log.info("房间已从系统中移除: {}", roomId);
             } else {
@@ -358,26 +356,6 @@ public class AdminService {
         } catch (Exception e) {
             log.error("解散房间时发生错误: {}", e.getMessage(), e);
             throw new RuntimeException("解散房间失败: " + e.getMessage(), e);
-        }
-    }
-    
-    /**
-     * 移除房间
-     * <p>
-     * 从系统中删除指定的房间。
-     * 注意：此方法仅在内部使用，不提供直接的房间删除功能。
-     * </p>
-     *
-     * @param roomId 要移除的房间ID
-     */
-    private void removeRoom(String roomId) {
-        try {
-            // 由于GameService没有直接的removeRoom方法，我们需要以适当的方式处理
-            log.info("从系统中移除房间: {}", roomId);
-            // 可能需要调用GameService中的其他方法或通过反射处理
-            // 这里我们简单地记录了操作，实际实现可能需要根据GameService的API调整
-        } catch (Exception e) {
-            log.error("移除房间时出错: {}", e.getMessage());
         }
     }
     
@@ -474,7 +452,7 @@ public class AdminService {
      * @throws IllegalArgumentException 如果房间不存在或玩家不在房间中
      */
     public void kickPlayerFromRoom(String playerId, String roomId) {
-        GameRoom gameRoom = gameService.getRoom(roomId);
+        GameRoom gameRoom = roomManagementService.getRoom(roomId);
         Player player = getOrCreatePlayer(playerId);
         
         if (gameRoom == null) {
@@ -490,7 +468,7 @@ public class AdminService {
         log.info("将玩家 {} 踢出房间 {}", playerId, roomId);
         
         // 将玩家移出房间
-        gameService.leaveRoom(playerId, roomId);
+        roomManagementService.leaveRoom(playerId, roomId);
         
         // 更新玩家状态
         player.setRoomId(null);

@@ -724,3 +724,57 @@ const unbanButton = document.getElementById('unbanButton');
 if (unbanButton) {
     unbanButton.addEventListener('click', handleUnbanPlayer);
 }
+
+// 系统启动时更新黑名单列表
+$(document).ready(function() {
+    updateBlacklistPlayerList();
+});
+
+// 玩家加入黑名单时更新黑名单列表
+function addPlayerToBlacklist(playerId) {
+    // 发送请求将玩家加入黑名单
+    $.ajax({
+        url: '/addPlayerToBlacklist',
+        method: 'POST',
+        data: { playerId: playerId },
+        success: function() {
+            updateBlacklistPlayerList();
+        }
+    });
+}
+
+// 更新黑名单玩家列表
+function updateBlacklistPlayerList() {
+    $.ajax({
+        url: '/getBlacklistPlayers',
+        method: 'GET',
+        success: function(data) {
+            var blacklistPlayerList = $('#blacklistPlayerList');
+            blacklistPlayerList.empty();
+            $.each(data, function(index, player) {
+                var row = $('<tr>');
+                row.append($('<td>').text(player.id));
+                row.append($('<td>').text(player.nickname));
+                row.append($('<td>').text(player.addedTime));
+                var removeButton = $('<button>').addClass('btn btn-primary').text('解除').click(function() {
+                    removePlayerFromBlacklist(player.id);
+                });
+                row.append($('<td>').append(removeButton));
+                blacklistPlayerList.append(row);
+            });
+            $('#blacklistPlayerCount').text(data.length + '个玩家');
+        }
+    });
+}
+
+// 从黑名单移除玩家
+function removePlayerFromBlacklist(playerId) {
+    $.ajax({
+        url: '/removePlayerFromBlacklist',
+        method: 'POST',
+        data: { playerId: playerId },
+        success: function() {
+            updateBlacklistPlayerList();
+        }
+    });
+}

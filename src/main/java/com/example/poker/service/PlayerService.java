@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PlayerService {
     private static final Logger logger = LoggerFactory.getLogger(PlayerService.class);
     
-    private final GameService gameService;
+    private final RoomManagementService roomManagementService;
     private final WebSocketService webSocketService;
     private final AdminService adminService;
     
@@ -45,8 +45,8 @@ public class PlayerService {
      * @param webSocketService WebSocket服务实例
      * @param adminService 管理服务实例
      */
-    public PlayerService(GameService gameService, WebSocketService webSocketService, AdminService adminService) {
-        this.gameService = gameService;
+    public PlayerService(RoomManagementService roomManagementService,WebSocketService webSocketService, AdminService adminService) {
+        this.roomManagementService = roomManagementService;
         this.webSocketService = webSocketService;
         this.adminService = adminService;
     }
@@ -65,7 +65,7 @@ public class PlayerService {
     public void handlePlayerExit(String roomId, String playerId) {
         logger.info("处理玩家退出 - 房间ID: {}, 玩家ID: {}", roomId, playerId);
         
-        GameState state = gameService.getGameState(roomId);
+        GameState state = roomManagementService.getGameState(roomId);
         if (state == null) {
             logger.error("游戏状态不存在 - 房间ID: {}", roomId);
             throw new GameException("游戏状态不存在", "GAME_STATE_NOT_FOUND");
@@ -105,7 +105,7 @@ public class PlayerService {
     private void transferHost(String roomId, String oldHostId) {
         logger.info("转移房主 - 房间ID: {}, 原房主: {}", roomId, oldHostId);
         
-        GameState state = gameService.getGameState(roomId);
+        GameState state = roomManagementService.getGameState(roomId);
         if (state == null || state.getPlayers().isEmpty()) {
             logger.error("无法转移房主 - 房间ID: {}", roomId);
             return;
@@ -180,16 +180,6 @@ public class PlayerService {
     }
     
     /**
-     * 更新玩家缓存
-     * @param player 玩家对象
-     */
-    private void updatePlayerCache(Player player) {
-        if (player != null && player.getId() != null) {
-            playerCache.put(player.getId(), player);
-        }
-    }
-    
-    /**
      * 将玩家加入禁用名单
      * @param playerId 玩家ID
      * @param seconds 禁用时长（秒）
@@ -220,7 +210,7 @@ public class PlayerService {
             if (currentRoomId != null) {
                 try {
                     // 从房间中移除玩家
-                    gameService.leaveRoom(currentRoomId, playerId);
+                    roomManagementService.leaveRoom(currentRoomId, playerId);
                     logger.info("已将玩家 {} 从房间 {} 中移除", playerId, currentRoomId);
                     
                     // 广播房间状态更新
@@ -306,10 +296,10 @@ public class PlayerService {
     private void cleanupPlayerData(String playerId) {
         try {
             // 1. 清理玩家的游戏状态
-            gameService.cleanupPlayerGameState(playerId);
+            roomManagementService.cleanupPlayerGameState(playerId);
             
             // 2. 清理玩家的房间关联
-            gameService.removePlayerFromAllRooms(playerId);
+            roomManagementService.removePlayerFromAllRooms(playerId);
             
             // 3. 清理玩家的WebSocket会话
             webSocketService.cleanupPlayerSession(playerId);
