@@ -1,4 +1,9 @@
 // 登录页面逻辑
+let stompClient = null;
+let currentPlayer = null;
+let connectionAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
+
 $(function() {
     // 清除之前的登录状态，但保留禁用信息
     clearAllUserData(true);
@@ -256,13 +261,69 @@ $(function() {
             
             // 显示加载提示
             showLoading('正在进入游戏...');
+
+            connectWebSocket();
             
             // 跳转到大厅页面
-            window.location.href = 'lobby.html';
+            //window.location.href = 'lobby.html';
         } catch (error) {
             console.error('[DEBUG] 登录过程出错:', error);
             showError('登录失败，请重试');
         }
+    }
+
+    // 连接WebSocket
+    function connectWebSocket() {
+        try {
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.debug = null; // 禁用debug日志
+
+            const connectHeaders = {
+                login: currentPlayer
+            };
+
+            stompClient.connect(connectHeaders, 
+                function(frame) {
+                    console.debug('WebSocket连接成功-lg');
+                    connectionAttempts = 0;
+                    broadcastLogin();
+                },
+                function(error) {
+                    console.error('WebSocket连接失败-lg:', error);
+                    handleConnectionError();
+                }
+            );
+        } catch (error) {
+            console.error('WebSocket连接错误-lg:', error);
+            handleConnectionError();
+        }
+    }
+
+    // 处理连接错误
+    function handleConnectionError() {
+        connectionAttempts++;
+        if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
+            console.debug(`尝试重新连接 (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(connectWebSocket, 2000);
+        } else {
+            showError('无法连接到服务器，请刷新页面重试-lg');
+        }
+    }
+
+    // 登录广播
+    function broadcastLogin() {
+        if (!stompClient ||!stompClient.connected) {
+            showError('未连接到服务器-lg');
+            return;
+        }
+        stompClient.send("/app/players/online", {}, JSON.stringify({
+            id: $('#nickname').val().trim(),
+            name: $('#nickname').val().trim()
+        }));
+
+        // 跳转到大厅页面
+        window.location.href = 'lobby.html';
     }
     
     function showLoading(message) {

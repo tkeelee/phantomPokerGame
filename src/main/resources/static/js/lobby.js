@@ -46,6 +46,7 @@ function connectWebSocket() {
                 connectionAttempts = 0;
                 setupSubscriptions();
                 loadRoomList();
+                loadPlayerList(); // 请求玩家列表
             },
             function(error) {
                 console.error('WebSocket连接失败:', error);
@@ -109,6 +110,16 @@ function loadRoomList() {
         return;
     }
     stompClient.send("/app/rooms/list", {}, {});
+}
+
+//加载玩家列表
+function loadPlayerList() {
+    if (!stompClient || !stompClient.connected) {
+        console.error('WebSocket未连接，无法请求玩家列表');
+        return;
+    }
+    stompClient.send("/app/players/list", {}, {});
+    console.debug('已发送玩家列表请求');
 }
 
 // 更新房间列表
@@ -176,6 +187,7 @@ function createRoom() {
     }
 
     stompClient.send("/app/rooms/create", {}, JSON.stringify({
+    //stompClient.send("/api/game/room", {}, JSON.stringify({
         hostId: currentPlayer,
         maxPlayers: 6 // 默认6人房
     }));
@@ -192,6 +204,9 @@ function joinRoom(roomId) {
         roomId: roomId,
         playerId: currentPlayer
     }));
+
+    // 跳转到大厅页面
+    window.location.href = 'game.html?roomId=' + roomId;
 }
 
 // 发送聊天消息
@@ -274,6 +289,11 @@ function handleBan(message) {
 
 // 退出登录
 function logout() {
+
+    stompClient.send("/app/players/offline", {}, JSON.stringify({
+        id: currentPlayer
+    }));
+
     if (stompClient && stompClient.connected) {
         stompClient.disconnect();
     }
@@ -541,4 +561,4 @@ function updateUI() {
         if (refreshRoomsBtn) refreshRoomsBtn.show();
         if (hostActions) hostActions.hide();
     }
-} 
+}

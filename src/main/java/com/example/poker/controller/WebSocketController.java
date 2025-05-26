@@ -35,6 +35,12 @@ public class WebSocketController {
     // 存储在线玩家
     private final Map<String, PlayerInfo> onlinePlayers = new ConcurrentHashMap<>();
 
+    @MessageMapping("/players/list")
+    public void getPlayerList() {
+        log.info("收到玩家列表请求，准备广播当前玩家列表。");
+        broadcastPlayerList(); // 直接调用广播方法
+    }
+
     @MessageMapping("/rooms/list")
     @SendTo("/topic/rooms")
     public List<RoomInfo> getRoomList() {
@@ -633,4 +639,4 @@ public class WebSocketController {
             e.printStackTrace();
         }
     }
-} 
+}

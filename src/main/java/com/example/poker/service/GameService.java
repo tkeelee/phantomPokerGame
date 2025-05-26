@@ -14,8 +14,8 @@ import org.slf4j.LoggerFactory;
  */
 @Service
 public class GameService {
-    private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
-    private final Map<String, GameState> gameStates = new ConcurrentHashMap<>();
+    private  Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
+    private  Map<String, GameState> gameStates = new ConcurrentHashMap<>();
     
     @Autowired
     private DeckService deckService;
@@ -25,6 +25,10 @@ public class GameService {
 
     private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
+    public void syncRoomsAndGameStates(Map<String, GameRoom> rooms, Map<String, GameState> gameStates) {
+        this.gameStates = gameStates;
+        this.rooms = rooms;
+    }
     /**
      * 玩家准备
      * @param roomId 房间ID
@@ -712,8 +716,11 @@ public class GameService {
         GameState state = gameStates.get(room.getId());
         if (state == null) return;
         
-        // 更新状态中的机器人信息
+        // 更新状态中的机器人信息--如果不更新，房间里也看不到
+        state.setPlayers(room.getPlayers());
         state.setRobotCount(room.getRobotCount());
+
+        //TODO 状态没有同步回roommanagement
         
         // 广播更新
         messagingTemplate.convertAndSend("/topic/game/state/" + room.getId(), state);

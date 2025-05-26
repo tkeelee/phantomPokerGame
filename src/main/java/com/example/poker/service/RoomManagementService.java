@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class RoomManagementService {
     private static final Logger logger = LoggerFactory.getLogger(RoomManagementService.class);
     
-    private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
+    public final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
     private final Map<String, GameState> gameStates = new ConcurrentHashMap<>();
 
     @Autowired
@@ -61,6 +61,9 @@ public class RoomManagementService {
         // 存储房间和状态
         rooms.put(room.getId(), room);
         gameStates.put(room.getId(), state);
+
+        //todo 同步游戏服务中的房间和状态
+        gameService.syncRoomsAndGameStates(rooms,gameStates);
         
         logger.info("房间创建成功 - 房间ID: {}", room.getId());
         return room;
@@ -105,6 +108,9 @@ public class RoomManagementService {
         // 存储房间和状态
         rooms.put(roomId, room);
         gameStates.put(roomId, state);
+
+        //todo 同步游戏服务中的房间和状态
+        gameService.syncRoomsAndGameStates(rooms,gameStates);
         
         logger.info("成功创建指定ID的房间: " + roomId);
         logger.info("当前所有房间: " + rooms.keySet());
@@ -148,6 +154,8 @@ public class RoomManagementService {
                 state.getPlayers().add(playerId);
             }
             
+            //todo 同步游戏服务中的房间和状态
+            gameService.syncRoomsAndGameStates(rooms,gameStates);
             // 发送状态更新
             gameService.sendGameStateUpdate(roomId);
         } else {
@@ -232,6 +240,9 @@ public class RoomManagementService {
             
             // 从游戏状态集合中移除
             gameStates.remove(roomId);
+
+            //todo 同步游戏服务中的房间和状态
+            gameService.syncRoomsAndGameStates(rooms,gameStates);
             
             logger.info("房间已从系统中移除: {}", roomId);
             return true;
