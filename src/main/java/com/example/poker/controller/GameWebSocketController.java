@@ -238,7 +238,7 @@ public class GameWebSocketController {
      * @param message 游戏消息
      */
     private void handleStartGame(GameMessage message) {
-        int deckCount = message.getDeclaredCount() > 0 ? message.getDeclaredCount() : 1;
+        int deckCount = message.getDeckCount() > 0 ? message.getDeckCount() : 1;
         gameService.startGame(message.getRoomId(), message.getPlayerId(), deckCount);
         
         // 发送游戏状态更新

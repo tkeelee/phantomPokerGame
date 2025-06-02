@@ -20,6 +20,7 @@ public class GameMessage {
     private boolean success;        // 操作是否成功
     private String message;         // 消息说明
     private GameState gameState;    // 游戏状态
+    private int deckCount;      // 牌组数量
 
     public GameMessage() {
     }
@@ -43,6 +44,14 @@ public class GameMessage {
 
     public void setPlayerId(String playerId) {
         this.playerId = playerId;
+    }
+
+    public int getDeckCount() {
+        return deckCount;
+    }
+
+    public void setDeckCount(int deckCount) {
+        this.deckCount = deckCount;
     }
 
     public String getRoomId() {

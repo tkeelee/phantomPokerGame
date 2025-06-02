@@ -15,7 +15,7 @@ public class Card {
      * 花色枚举
      */
     public enum Suit {
-        SPADES, HEARTS, CLUBS, DIAMONDS, JOKER
+        SPADES, HEARTS, CLUBS, DIAMONDS
     }
 
     private Suit suit;    // 花色
@@ -38,7 +38,7 @@ public class Card {
      * @param isRed 是否是大王
      */
     public Card(boolean isRed) {
-        this.suit = Suit.JOKER;
+        this.suit = null;
         this.value = 0;
         this.isJoker = true;
     }

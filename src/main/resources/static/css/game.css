@@ -667,3 +667,31 @@ h3,
     font-size: 16px;
     font-weight: 500;
 }
+
+/* 输入框和按钮组样式 */
+.input-group {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.input-group .form-control {
+    flex: 1;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-bottom: 0;
+}
+
+.input-group .btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.button-group .btn {
+    flex: 1;
+}

@@ -124,10 +124,14 @@
         <div class="game-controls">
             <h3>操作区</h3>
             <button id="readyBtn" class="btn btn-primary">准备</button>
-            <input type="text" id="declareValue" class="form-control" placeholder="声明点数">
-            <button id="playBtn" onclick="playCards()" class="btn btn-success" disabled>出牌</button>
-            <button id="passBtn" onclick="pass()" class="btn btn-warning" disabled>过牌</button>
-            <button id="challengeBtn" onclick="challenge()" class="btn btn-danger" disabled>质疑</button>
+            <div class="gamecontrols input-group mb-3">
+                <input type="text" id="declareValue" class="form-control" placeholder="声明点数">
+                <button id="playBtn" onclick="playCards()" class="btn btn-success" disabled>出牌</button>
+            </div>
+            <div class="gamecontrolsbutton-group">
+                <button id="passBtn" onclick="pass()" class="btn btn-warning" disabled>过牌</button>
+                <button id="challengeBtn" onclick="challenge()" class="btn btn-danger" disabled>质疑</button>
+            </div>
         </div>
     </div>
 

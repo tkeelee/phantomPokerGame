@@ -207,6 +207,9 @@ public class GameRoom {
      * @return 下一个玩家的索引
      */
     public int getNextPlayerIndex() {
+        if (players == null || players.isEmpty()) {
+            return 0;
+        }
         return (currentPlayerIndex + 1) % players.size();
     }
 
