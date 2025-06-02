@@ -125,47 +125,6 @@ h3, h4, h5, .section-header h2 {
     color: white;
 }
 
-/* 游戏信息区域 */
-.game-info {
-    background: var(--new-lighter-blue);
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    border: 1px solid var(--border-color);
-}
-
-.game-info .player {
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.game-info .player:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-}
-
-.game-info .player-name {
-    font-weight: bold;
-    color: var(--text-light);
-}
-
-.game-info .player-status {
-    margin-left: 10px;
-    font-size: 14px;
-    color: var(--text-muted);
-}
-
-.game-info .player-turn {
-    background: var(--primary-color);
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    margin-left: 10px;
-}
-
 /* 机器人标识 */
 .robot-badge {
     display: inline-block;
@@ -276,10 +235,47 @@ h3, h4, h5, .section-header h2 {
     border: 1px solid var(--border-color);
 }
 
+.header-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+    align-items: center;
+}
+
 .game-header h2, .lobby-header h1 {
-    color: var(--text-dark);
+    color: var(--text-light);
     margin: 0;
     font-weight: 600;
+}
+
+.room-info {
+    text-align: left;
+}
+
+.game-status {
+    text-align: center;
+    color: var(--text-light);
+}
+
+.player-info {
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 在小屏幕上调整为垂直布局 */
+@media (max-width: 768px) {
+    .header-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .room-info, .game-status, .player-info {
+        text-align: center;
+        justify-content: center;
+    }
 }
 
 /* 模态框样式 */
@@ -563,7 +559,10 @@ h3, .section-title {
 .history-item,
 .chat-message,
 .card-count,
-.player-status {
+.player-status,
+.player-item,
+.history-list,
+.last-claim {
     color: white;
 }
 
@@ -667,19 +666,4 @@ h3,
     border-radius: 8px 8px 0 0;
     font-size: 16px;
     font-weight: 500;
-}
-
-/* 确保所有信息文字为白色 */
-.player-name,
-.room-info,
-.game-status,
-.history-item,
-.chat-message,
-.card-count,
-.player-status,
-.player-item,
-.history-list,
-.last-claim,
-.game-info {
-    color: white;
 }
