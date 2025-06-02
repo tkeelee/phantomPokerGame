@@ -506,8 +506,8 @@ function handleGameState(state) {
     }
 
     // 更新手牌
-    if (state.hand) {
-        gameState.hand = state.hand;
+    if (state.playerHands) {
+        gameState.hand = state.playerHands;
     }
 
     // 更新UI
@@ -1384,7 +1384,7 @@ function updateGameUI() {
                 startBtn.style.display = 'block';
                 startBtn.disabled = false;
             } else {
-                startBtn.style.display = 'none';
+                startBtn.style.display = 'block';//none
             }
         }
 
@@ -1606,7 +1606,7 @@ function updateUI(state) {
                 
                 // 更新准备按钮文本，确保readyPlayers存在
                 const readyPlayers = state.readyPlayers || gameState.readyPlayers || [];
-                const isReady = readyPlayers.includes(currentPlayer);
+                const isReady = readyPlayers.includes(currentPlayer.id);
                 readyBtn.textContent = isReady ? '取消准备' : '准备';
                 readyBtn.className = 'btn ' + (isReady ? 'btn-warning' : 'btn-primary') + ' w-100 mt-2';
             }
@@ -1616,13 +1616,13 @@ function updateUI(state) {
                 const players = state.players || gameState.players || [];
                 const readyPlayers = state.readyPlayers || gameState.readyPlayers || [];
                 const allReady = readyPlayers.length === players.length && players.length >= 2;
-                startBtn.style.display = (gameState.isHost && allReady) ? 'block' : 'none';
+                startBtn.style.display = (gameState.isHost && allReady) ? 'block' : 'block';//'block' : 'none'
             }
         } else {
             // 游戏已开始，隐藏准备按钮和房主控制
             if (readyBtn) readyBtn.style.display = 'none';
             if (hostControls) hostControls.style.display = 'none';
-            if (startBtn) startBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'block';//none
         }
         
         // 更新游戏控制面板
@@ -2461,7 +2461,7 @@ function removeAllRobots() {
         roomId: roomId
     }));
 }
-
+/*
 // 开始游戏
 function startGame() {
     if (!stompClient || !stompClient.connected) return;
@@ -2473,6 +2473,7 @@ function startGame() {
         roomId: roomId
     }));
 }
+*/
 
 // 获取房间ID
 function getRoomId() {

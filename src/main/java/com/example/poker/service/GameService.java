@@ -48,6 +48,13 @@ public class GameService {
         if (!room.getReadyPlayers().contains(playerId)) {
             room.getReadyPlayers().add(playerId);
         }
+
+        GameState state1 = gameStates.get(roomId);
+        if (state1 != null) {
+            state1.getReadyPlayers().add(playerId);
+            // 发送状态更新
+            sendGameStateUpdate(roomId);
+        }
         
         // 如果所有玩家都准备好了，房主可以开始游戏
         if (room.getReadyPlayers().size() == room.getPlayers().size() && room.getPlayers().size() >= 2) {
@@ -82,9 +89,10 @@ public class GameService {
         if (!playerId.equals(room.getHostId())) {
             throw new RuntimeException("只有房主可以开始游戏");
         }
-        if (room.getStatus() != GameStatus.READY) {
-            throw new RuntimeException("玩家未全部准备");
-        }
+        //临时注释
+        //if (room.getStatus() != GameStatus.READY) {
+            //throw new RuntimeException("玩家未全部准备");
+        //}
         if (room.getPlayers().size() < 2) {
             throw new RuntimeException("玩家人数不足");
         }
@@ -718,6 +726,7 @@ public class GameService {
         
         // 更新状态中的机器人信息--如果不更新，房间里也看不到
         state.setPlayers(room.getPlayers());
+        state.setReadyPlayers(room.getReadyPlayers());
         state.setRobotCount(room.getRobotCount());
 
         //TODO 状态没有同步回roommanagement
