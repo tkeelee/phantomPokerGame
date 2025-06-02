@@ -1,5 +1,14 @@
 /* 扑克游戏现代主题 - game-theme.css */
 
+/* 扑克牌花色颜色 */
+.red {
+  color: #d32f2f !important; /* 红色（红桃、方块） */
+}
+.black {
+  color: #222 !important;    /* 黑色（黑桃、梅花） */
+}
+
+
 :root {
     --primary-color: #0d6efd;
     --primary-dark: #0a58ca;
@@ -35,14 +44,18 @@ body {
     display: inline-block;
     width: 60px;
     height: 90px;
-    margin: 5px;
+    /* 叠加效果，首张特殊处理 */
+    margin-left: -40px;
+    margin-right: 0;
     background: white;
     border: none;
     border-radius: 8px;
     position: relative;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(.4,2,.6,1);
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
+    vertical-align: bottom;
+    z-index: 1;
 }
 
 .card:hover {
@@ -51,7 +64,8 @@ body {
 }
 
 .card.selected {
-    transform: translateY(-15px);
+    /* 上推1/3高度，z-index不变 */
+    transform: translateY(-30px);
     box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3), 0 0 0 3px var(--primary-color);
 }
 
@@ -694,4 +708,60 @@ h3,
 
 .button-group .btn {
     flex: 1;
+}
+
+/* ====== 以下为原game.js动态插入的样式，已迁移至此 ====== */
+.room-info {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.host-controls {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+.status-badges {
+    margin-top: 10px;
+}
+
+.badge {
+    margin-right: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+.player-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 15px;
+}
+
+.player-card {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s ease;
+}
+
+.player-card:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.player-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.player-status {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }

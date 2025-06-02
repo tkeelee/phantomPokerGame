@@ -147,7 +147,7 @@ function connectWebSocket() {
                     console.debug('收到游戏状态更新原始数据:', message.body);
                     const state = JSON.parse(message.body);
                     console.debug('解析后的游戏状态:', state);
-                    handleGameState(state);
+                    handleGameState(state); 
                 } catch (error) {
                     console.error('[DEBUG] 解析游戏状态失败:', error);
                     console.error('[DEBUG] 原始消息:', message.body);
@@ -517,18 +517,19 @@ function handleGameState(state) {
         gameState.playerHands = state.playerHands;
     }
 
-    // 更新UI
-    updateUI(state);
-    
-    // 更新玩家列表
-    updatePlayerList(state);
-    
     // 如果是游戏中而且是当前玩家的回合，更新可用操作
     if (state.gameStatus === 'PLAYING' && state.currentPlayer === currentPlayer) {
         enablePlayerActions(state);
     } else {
         disablePlayerActions();
     }
+
+    // 更新UI
+    updateUI(state);
+    
+    // 更新玩家列表
+    updatePlayerList(state);
+
 }
 
 function updateGameState(state) {
@@ -806,53 +807,84 @@ function updatePlayerList(state) {
     });
 }
 
+/**
+ * 渲染玩家手牌，所有卡牌一行横排，超出部分叠加，选中卡牌上推
+ * @param {Array} hand 手牌数组
+ */
 function updateHand(hand) {
     const playerHand = document.getElementById('playerHand');
     playerHand.innerHTML = '';
 
-    hand.forEach(card => {
+    hand.forEach((card, idx) => {
         const cardElement = document.createElement('div');
-        cardElement.className = `card ${gameState.selectedCards.has(card.id) ? 'selected' : ''}`;
-        
-        // 确定牌面颜色（红色或黑色）
-        const isRed = card.suit === '♥' || card.suit === '♦';
-        const colorClass = isRed ? 'red' : 'black';
-        
+        cardElement.className = `card${gameState.selectedCards.has(card) ? ' selected' : ''}`;
+        // 首张卡牌不叠加
+        cardElement.style.marginLeft = idx === 0 ? '0' : '-40px';
+
         // 处理特殊牌（大小王）
-        if (card.value === 'Joker') {
+        if (card.value === '0') {
             cardElement.innerHTML = `
                 <div class="rank joker">JOKER</div>
                 <div class="center-icon joker">🃏</div>
             `;
         } else {
+            // 确定牌面颜色（红色或黑色）
+            const suitSymbol = getSuitSymbol(card.suit);
+            const valueDisplay = getValueDisplay(card.value);
+            const isRed = suitSymbol === '♥' || suitSymbol === '♦';
+            const colorClass = isRed ? 'red' : 'black';
             cardElement.innerHTML = `
-                <div class="rank ${colorClass}">${card.value}</div>
-                <div class="suit ${colorClass}">${card.suit}</div>
-                <div class="center-icon ${colorClass}">${card.suit}</div>
+                <div class="rank ${colorClass}">${valueDisplay}</div>
+                <div class="suit ${colorClass}">${suitSymbol}</div>
+                <div class="center-icon ${colorClass}">${suitSymbol}</div>
             `;
         }
-        
-        // 添加点击事件和动画效果
+
+        // 点击切换选中状态，允许多选
         cardElement.onclick = () => {
             if (gameState.isMyTurn) {
-                toggleCardSelection(card.id);
+                if (gameState.selectedCards.has(card)) {
+                    gameState.selectedCards.delete(card);
+                    //待实现复位
+                    //updateHand(hand);
+                } else {
+                    gameState.selectedCards.add(card);
+                }
                 playSound('clickSound');
+                updatePlayInputState();
             }
         };
-        
-        // 添加悬停动画数据
-        cardElement.dataset.cardId = card.id;
-        
+
+        cardElement.dataset.cardId = card.value;
         playerHand.appendChild(cardElement);
     });
-    
+
     // 更新手牌区域的计数显示
     const handCountElement = document.getElementById('handCount');
     if (handCountElement) {
         handCountElement.textContent = `手牌: ${hand.length}张`;
     }
-    
+
+    // 每次渲染后，联动出牌输入区
+    updatePlayInputState();
+
     console.log(`[DEBUG] 更新了玩家手牌，共${hand.length}张`);
+}
+
+/**
+ * 联动出牌输入区：有选中卡牌时，右侧输入点数和出牌按钮可用，否则禁用
+ */
+function updatePlayInputState() {
+    // 假设输入框id为declaredValue，按钮id为playBtn
+    const declaredValueInput = document.getElementById('declaredValue');
+    const playBtn = document.getElementById('playBtn');
+    const hasSelected = gameState.selectedCards && gameState.selectedCards.size > 0;
+    if (declaredValueInput) {
+        declaredValueInput.disabled = !hasSelected;
+    }
+    if (playBtn) {
+        playBtn.disabled = !hasSelected;
+    }
 }
 
 function updateCurrentPile(pile) {
@@ -871,10 +903,6 @@ function updateCurrentPile(pile) {
         const cardElement = document.createElement('div');
         cardElement.className = 'card pile-card';
         
-        // 确定牌面颜色（红色或黑色）
-        const isRed = card.suit === '♥' || card.suit === '♦';
-        const colorClass = isRed ? 'red' : 'black';
-        
         // 处理特殊牌（大小王）
         if (card.value === '0') {
             cardElement.innerHTML = `
@@ -882,10 +910,15 @@ function updateCurrentPile(pile) {
                 <div class="center-icon joker">🃏</div>
             `;
         } else {
+            // 确定牌面颜色（红色或黑色）
+            const suitSymbol = getSuitSymbol(card.suit);
+            const valueDisplay = getValueDisplay(card.value);
+            const isRed = suitSymbol === '♥' || suitSymbol === '♦';
+            const colorClass = isRed ? 'red' : 'black';
             cardElement.innerHTML = `
-                <div class="rank ${colorClass}">${card.value}</div>
-                <div class="suit ${colorClass}">${card.suit}</div>
-                <div class="center-icon ${colorClass}">${card.suit}</div>
+                <div class="rank ${colorClass}">${valueDisplay}</div>
+                <div class="suit ${colorClass}">${suitSymbol}</div>
+                <div class="center-icon ${colorClass}">${suitSymbol}</div>
             `;
         }
         
@@ -929,7 +962,7 @@ function selectAllSameValue() {
     const value = document.getElementById('declaredValue').value;
     gameState.playerHands.forEach(card => {
         if (card.value === value) {
-            gameState.selectedCards.add(card.id);
+            gameState.selectedCards.add(card);
         }
     });
 
@@ -1774,7 +1807,7 @@ function updateHandAndActions(state) {
             updateHand(currentPlayerHand);
             
             // 判断是否是当前玩家的回合
-            const isMyTurn = state.currentPlayer === currentPlayer;
+            const isMyTurn = state.currentPlayer === currentPlayerId;
             gameState.isMyTurn = isMyTurn;
             
             // 启用或禁用玩家操作按钮
@@ -2008,12 +2041,14 @@ function renderPlayerCards(player) {
     // 当前玩家显示实际牌面
     if (isCurrentPlayer) {
         player.cards.forEach(card => {
+            const suitSymbol = getSuitSymbol(card.suit);
+            const valueDisplay = getValueDisplay(card.value);
             cardsHtml += `
                 <div class="card-item ${card.selected ? 'selected' : ''}" 
-                     data-card="${card.value}${card.suit}" 
+                     data-card="${valueDisplay}${suitSymbol}" 
                      onclick="toggleCardSelection(this)">
                     <div class="card-inner">
-                        <span class="card-value card-${card.suit}">${getCardDisplay(card)}</span>
+                        <span class="card-value card-${suitSymbol}">${valueDisplay}</span>
                     </div>
                 </div>
             `;
@@ -2316,7 +2351,7 @@ function playCards() {
         return;
     }
     
-    if (selectedCards.size === 0) {
+    if (gameState.selectedCards.size === 0) {
         showWarning('请选择要出的牌');
         return;
     }
@@ -2334,7 +2369,7 @@ function playCards() {
         type: "PLAY",
         roomId: currentRoomId,
         playerId: playerIdStr,
-        cards: Array.from(selectedCards),
+        cards: Array.from(gameState.selectedCards),
         declaredValue: declareValue
     }));
     
@@ -2405,12 +2440,14 @@ function updateHandCards(cards) {
     
     cards.forEach(card => {
         const cardElement = document.createElement('div');
+        const suitSymbol = getSuitSymbol(card.suit);
+        const valueDisplay = getValueDisplay(card.value);
         cardElement.className = 'card';
         cardElement.innerHTML = `
             <div class="card-inner">
                 <div class="card-face">
-                    <span class="card-value">${card.value}</span>
-                    <span class="card-suit ${card.suit.toLowerCase()}">${getSuitSymbol(card.suit)}</span>
+                    <span class="card-value">${valueDisplay}</span>
+                    <span class="card-suit ${card.suit.toLowerCase()}">${suitSymbol}</span>
                 </div>
             </div>
         `;
@@ -2421,7 +2458,7 @@ function updateHandCards(cards) {
 }
 
 function getSuitSymbol(suit) {
-    switch(suit.toUpperCase()) {
+    switch(suit) {
         case 'HEARTS': return '♥';
         case 'DIAMONDS': return '♦';
         case 'CLUBS': return '♣';
@@ -2430,6 +2467,15 @@ function getSuitSymbol(suit) {
     }
 }
 
+function getValueDisplay(value) {
+    const displays = {
+        1: 'A',
+        11: 'J',
+        12: 'Q',
+        13: 'K'
+    };
+    return displays[value] || value;
+}
 // 更新当前出牌区域
 function updateCurrentPlay(cards, declaredValue) {
     const playArea = document.getElementById('currentPlay');
@@ -2442,7 +2488,7 @@ function updateCurrentPlay(cards, declaredValue) {
             <div class="card played">
                 <div class="card-inner">
                     <div class="card-face">
-                        <span class="card-value">${card.value}</span>
+                        <span class="card-value">${getValueDisplay(card.value)}</span>
                         <span class="card-suit ${card.suit.toLowerCase()}">${getSuitSymbol(card.suit)}</span>
                     </div>
                 </div>
@@ -2550,63 +2596,3 @@ function getRoomId() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('roomId');
 }
-
-// 添加样式
-const gameStyles = document.createElement('style');
-gameStyles.textContent = `
-    .room-info {
-        background-color: rgba(0, 0, 0, 0.3);
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-    
-    .host-controls {
-        background-color: rgba(0, 0, 0, 0.2);
-        border-radius: 8px;
-        padding: 10px;
-        margin-top: 10px;
-    }
-    
-    .status-badges {
-        margin-top: 10px;
-    }
-    
-    .badge {
-        margin-right: 8px;
-        padding: 8px 12px;
-        font-size: 14px;
-    }
-    
-    .player-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 15px;
-        padding: 15px;
-    }
-    
-    .player-card {
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 15px;
-        transition: all 0.3s ease;
-    }
-    
-    .player-card:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    .player-name {
-        font-size: 16px;
-        font-weight: 500;
-        color: #fff;
-        margin-bottom: 8px;
-    }
-    
-    .player-status {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-`;
-document.head.appendChild(gameStyles);
