@@ -5,7 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 玩家状态类，用于记录游戏中玩家的状态信息
+ * 玩家状态类，用于向前端提供玩家状态信息的视图
+ * 不直接实现IPlayer接口，而是作为IPlayer的一个视图
  */
 @Data
 public class PlayerState {
@@ -18,6 +19,9 @@ public class PlayerState {
     private boolean winner;         // 是否胜利者
     private String lastAction;      // 最后一次动作
     private long lastActionTime;    // 最后一次动作时间
+    private String status;          // 玩家状态
+    private String roomId;          // 房间ID
+    private int score;              // 分数
     
     /**
      * 默认构造函数
@@ -29,6 +33,7 @@ public class PlayerState {
         this.isHost = false;
         this.winner = false;
         this.ranking = 0;
+        this.score = 0;
     }
     
     /**
@@ -38,6 +43,29 @@ public class PlayerState {
     public PlayerState(String playerId) {
         this();
         this.playerId = playerId;
+    }
+    
+    /**
+     * 从IPlayer创建PlayerState
+     * @param player 玩家
+     * @return 玩家状态
+     */
+    public static PlayerState fromPlayer(IPlayer player) {
+        if (player == null) {
+            return null;
+        }
+        
+        PlayerState state = new PlayerState();
+        state.setPlayerId(player.getId());
+        state.setActive(player.isActive());
+        state.setReady(player.isReady());
+        state.setHand(new ArrayList<>(player.getHand()));
+        state.setHost(player.isHost());
+        state.setStatus(player.getStatus());
+        state.setRoomId(player.getRoomId());
+        state.setScore(player.getScore());
+        
+        return state;
     }
     
     /**

@@ -11,26 +11,26 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/common.css"/>
-    <link rel="stylesheet" href="css/index.css"/>
+    <link rel="stylesheet" href="css/login.css"/>
 </head>
-<body class="login-page">
+
+<body class="game-background">
     <div class="container">
         <div class="login-container">
-            <h1>幻影扑克</h1>
+            <h2 class="login-title">幻影扑克</h2>
+            <div id="loginMessage"></div>
             <div class="login-form">
-                <div class="form-group">
-                    <label for="nickname">请输入您的昵称:</label>
-                    <input type="text" class="form-control" id="nickname" placeholder="在此输入昵称">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="nickname" placeholder="请输入昵称">
                 </div>
-                <button id="login-btn" class="btn btn-primary">进入游戏</button>
+                <div class="mb-3">
+                    <button class="btn-primary btn-login" id="login-btn"><span>进入游戏</span></button>
+                </div>
             </div>
-            <div class="game-intro">
-                <p>欢迎来到幻影扑克 - 一款刺激的多人在线卡牌游戏！</p>
+            <div class="text-center mt-3 copyright">
+                <p>© 2023 幻影扑克 - 所有权利保留</p>
+                <a href="/admin.html" class="admin-link">管理员入口</a>
             </div>
-        </div>
-        <div class="footer">
-            <p>© 2023 幻影扑克 - 所有权利保留</p>
-            <a href="/admin.html" class="admin-link">管理员入口</a>
         </div>
     </div>
     <script src="js/login.js"></script>

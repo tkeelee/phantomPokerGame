@@ -5,6 +5,7 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import com.example.poker.service.RoomManagementService;
 import com.example.poker.service.AdminService;
 import com.example.poker.model.Player;
@@ -25,6 +26,7 @@ public class WebSocketController {
     private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
+    @Lazy
     private RoomManagementService roomManagementService;
 
     @Autowired
@@ -307,42 +309,21 @@ public class WebSocketController {
      * @param playerId 玩家ID
      */
     private void handlePlayerLeaveRoom(String roomId, String playerId) {
-        RoomInfo room = rooms.get(roomId);
-        if (room == null || !room.getPlayers().contains(playerId)) {
-            return;
-        }
+        log.info("处理玩家离开房间 - 玩家: {}, 房间: {}", playerId, roomId);
         
-        room.getPlayers().remove(playerId);
-        room.setPlayerCount(room.getPlayerCount() - 1);
-        log.info("玩家已从房间移除 - 玩家: " + playerId + ", 房间: " + room.getName() + ", 剩余玩家数: " + room.getPlayerCount());
-        
-        // 如果房间空了，删除房间
-        if (room.getPlayerCount() == 0) {
-            rooms.remove(room.getId());
-            log.info("空房间已删除 - 房间ID: " + room.getId());
-        }
-        // 如果是房主退出，转移房主权
-        else if (playerId.equals(room.getHostId()) && !room.getPlayers().isEmpty()) {
-            String newHostId = room.getPlayers().get(0);
-            room.setHostId(newHostId);
-            log.info("房主权已转移 - 新房主: " + newHostId);
-        }
-        
-        // 同步到游戏服务
         try {
+            // 调用RoomManagementService处理玩家离开房间的逻辑
             roomManagementService.leaveRoom(roomId, playerId);
+            log.info("玩家已成功离开房间");
+            
+            // 广播玩家列表更新
+            broadcastPlayerList();
+            
+            // 向管理页面广播更新的房间和玩家信息
+            notifyAdminUpdate();
         } catch (Exception e) {
-            log.error("同步玩家离开房间到GameService失败: " + e.getMessage());
+            log.error("处理玩家离开房间失败: {}", e.getMessage(), e);
         }
-        
-        // 广播房间列表更新
-        messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
-        
-        // 广播玩家列表更新
-        broadcastPlayerList();
-
-        // 向管理页面广播更新的房间和玩家信息
-        notifyAdminUpdate();
     }
 
     private void broadcastPlayerList() {
@@ -607,15 +588,31 @@ public class WebSocketController {
         public void setRoomId(String roomId) { this.roomId = roomId; }
     }
 
-    // 添加广播房间列表方法
-    private void broadcastRoomList() {
-        try {
-            messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
-            log.info("广播房间列表更新成功");
-        } catch (Exception e) {
-            log.error("广播房间列表失败: " + e.getMessage());
-            e.printStackTrace();
+    /**
+     * 同步房间数据
+     * 从RoomManagementService接收房间信息列表并更新内部存储
+     * @param roomInfoList 房间信息列表
+     */
+    public void syncRooms(List<RoomInfo> roomInfoList) {
+        log.info("同步房间数据，接收到 {} 个房间", roomInfoList.size());
+        
+        // 清空当前房间列表
+        rooms.clear();
+        
+        // 添加新的房间信息
+        for (RoomInfo roomInfo : roomInfoList) {
+            rooms.put(roomInfo.getId(), roomInfo);
         }
+        
+        log.info("房间数据同步完成，当前房间数: {}", rooms.size());
+    }
+
+    /**
+     * 广播房间列表更新
+     */
+    public void broadcastRoomList() {
+        log.info("广播房间列表更新");
+        messagingTemplate.convertAndSend("/topic/rooms", new ArrayList<>(rooms.values()));
     }
 
     // 检查玩家是否在任何房间中

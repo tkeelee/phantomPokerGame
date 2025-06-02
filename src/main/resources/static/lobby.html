@@ -30,17 +30,17 @@
         <!-- 玩家列表 -->
         <div class="player-list-container">
             <h3 class="section-title">在线玩家</h3>
-            <div id="playerList"></div>
+            <div id="playerList" class="player-list"></div>
         </div>
         
         <!-- 房间列表 -->
         <div class="room-list-container">
             <h3 class="section-title">游戏房间</h3>
             <div class="room-actions">
-                <button id="createRoomBtn" class="btn btn-primary me-2" onclick="createRoom()">创建房间</button>
+                <button id="createRoomBtn" class="btn btn-primary" onclick="createRoom()">创建房间</button>
                 <button id="refreshRoomsBtn" class="btn btn-outline-light" onclick="loadRoomList()">刷新列表</button>
             </div>
-            <div id="roomList"></div>
+            <div id="roomList" class="room-list"></div>
         </div>
         
         <!-- 聊天区域 -->

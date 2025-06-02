@@ -1,14 +1,15 @@
 .login-container {
     max-width: 400px;
+    width: 90%;
     margin: 100px auto;
     padding: 20px;
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: rgba(255, 255, 255, 0.9);
     border-radius: 8px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .login-title {
-    color: #fff;
+    color: #333;
     text-align: center;
     margin-bottom: 30px;
     font-size: 24px;
@@ -16,33 +17,93 @@
 
 .login-form {
     margin-top: 20px;
+    width: 100%;
 }
 
 .form-control {
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #fff;
+    background-color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    color: #333;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border-radius: 4px;
+    height: auto;
+    font-size: 16px;
 }
 
 .form-control:focus {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 1);
     border-color: #007bff;
-    color: #fff;
+    color: #333;
     box-shadow: none;
 }
 
 .form-control::placeholder {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(0, 0, 0, 0.6);
 }
 
-.btn-login {
+.login-form .mb-3 {
+    margin-bottom: 10px !important;
+}
+
+.login-form .btn-login {
     width: 100%;
     padding: 10px;
     font-size: 16px;
-    margin-top: 10px;
+    margin-top: 0;
+    box-sizing: border-box;
+    text-align: center;
+    display: block;
+    transform: none !important;
+    border-radius: 4px !important;
+    height: auto !important;
+    line-height: normal !important;
+}
+
+.login-form .btn-login:hover {
+    transform: none !important;
+    opacity: 0.9 !important;
+    background-color: #0069d9 !important;
+    -webkit-transform: none !important;
+    -moz-transform: none !important;
+    -ms-transform: none !important;
 }
 
 .alert {
     margin-top: 10px;
     margin-bottom: 10px;
+}
+
+.copyright {
+    color: #666;
+    margin-top: 20px;
+    font-size: 12px;
+}
+
+.game-background {
+    background: linear-gradient(135deg, #014866 0%, #227fba 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.footer { 
+    margin-top: 50px; 
+    text-align: center; 
+    color: #666; 
+    font-size: 0.9rem; 
+}
+
+.admin-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: #999;
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.admin-link:hover {
+    color: #666;
 }

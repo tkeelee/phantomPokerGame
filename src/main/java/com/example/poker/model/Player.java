@@ -1,63 +1,117 @@
 package com.example.poker.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.EqualsAndHashCode;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.ArrayList;
 
+/**
+ * 玩家类，为了保持与现有代码的兼容性
+ * 实际上是HumanPlayer的别名
+ */
 @Data
-@Builder
+@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
-@AllArgsConstructor
-public class Player {
-    private String id;
-    private String name;
-    private List<Card> hand;
-    private int score;
-    private boolean active;
-    private String status; // ONLINE, PLAYING, OFFLINE
-    private String roomId;
-    private Instant lastActiveTime;
+public class Player extends AbstractPlayer {
     
-    @Builder.Default
-    private boolean ready = false;
-    
-    @Builder.Default
-    private boolean host = false;
-
+    /**
+     * 使用ID和名称构造玩家
+     * @param id 玩家ID
+     * @param name 玩家名称
+     */
     public Player(String id, String name) {
-        this.id = id;
-        this.name = name;
-        this.hand = new ArrayList<>();
-        this.score = 0;
-        this.active = true;
+        super(id, name);
     }
-
-    // Getters and setters
-    public String getId() { return id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public List<Card> getHand() { return hand; }
-    public void addToHand(Card card) {
-        hand.add(card);
+    
+    /**
+     * 创建一个Builder实例
+     * @return PlayerBuilder实例
+     */
+    public static PlayerBuilder builder() {
+        return new PlayerBuilder();
     }
-
-    public void removeFromHand(Card card) {
-        hand.remove(card);
+    
+    /**
+     * 玩家构建器类，保持与原有代码的兼容性
+     */
+    public static class PlayerBuilder {
+        private String id;
+        private String name;
+        private List<Card> hand = new ArrayList<>();
+        private int score;
+        private boolean active = true;
+        private String status;
+        private String roomId;
+        private Instant lastActiveTime;
+        private boolean ready = false;
+        private boolean host = false;
+        
+        public PlayerBuilder id(String id) {
+            this.id = id;
+            return this;
+        }
+        
+        public PlayerBuilder name(String name) {
+            this.name = name;
+            return this;
+        }
+        
+        public PlayerBuilder hand(List<Card> hand) {
+            this.hand = hand;
+            return this;
+        }
+        
+        public PlayerBuilder score(int score) {
+            this.score = score;
+            return this;
+        }
+        
+        public PlayerBuilder active(boolean active) {
+            this.active = active;
+            return this;
+        }
+        
+        public PlayerBuilder status(String status) {
+            this.status = status;
+            return this;
+        }
+        
+        public PlayerBuilder roomId(String roomId) {
+            this.roomId = roomId;
+            return this;
+        }
+        
+        public PlayerBuilder lastActiveTime(Instant lastActiveTime) {
+            this.lastActiveTime = lastActiveTime;
+            return this;
+        }
+        
+        public PlayerBuilder ready(boolean ready) {
+            this.ready = ready;
+            return this;
+        }
+        
+        public PlayerBuilder host(boolean host) {
+            this.host = host;
+            return this;
+        }
+        
+        public Player build() {
+            Player player = new Player();
+            player.setId(id);
+            player.setName(name);
+            player.setHand(hand);
+            player.setScore(score);
+            player.setActive(active);
+            player.setStatus(status);
+            player.setRoomId(roomId);
+            player.setLastActiveTime(lastActiveTime);
+            player.setReady(ready);
+            player.setHost(host);
+            return player;
+        }
     }
-
-    public void updateScore(int delta) {
-        score += delta;
-    }
-
-    public int getScore() { return score; }
-    public boolean isActive() { return active; }
-
-    public void setHand(List<Card> hand) { this.hand = hand; }
-    public void setScore(int score) { this.score = score; }
-    public void setActive(boolean active) { this.active = active; }
 }

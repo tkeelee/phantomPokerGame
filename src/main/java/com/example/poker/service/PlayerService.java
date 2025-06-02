@@ -5,7 +5,6 @@ import com.example.poker.model.Player;
 import java.util.List;
 import java.util.ArrayList;
 import com.example.poker.model.Card;
-import com.example.poker.exception.GameException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -49,76 +48,6 @@ public class PlayerService {
         this.roomManagementService = roomManagementService;
         this.webSocketService = webSocketService;
         this.adminService = adminService;
-    }
-
-    /**
-     * 处理玩家退出事件
-     * 包括以下处理：
-     * 1. 房主转移（如果退出的是房主）
-     * 2. 玩家手牌转移到底盘
-     * 3. 从玩家列表中移除
-     * 4. 转移出牌权（如果退出的是当前玩家）
-     * 
-     * @param roomId 房间ID
-     * @param playerId 玩家ID
-     */
-    public void handlePlayerExit(String roomId, String playerId) {
-        logger.info("处理玩家退出 - 房间ID: {}, 玩家ID: {}", roomId, playerId);
-        
-        GameState state = roomManagementService.getGameState(roomId);
-        if (state == null) {
-            logger.error("游戏状态不存在 - 房间ID: {}", roomId);
-            throw new GameException("游戏状态不存在", "GAME_STATE_NOT_FOUND");
-        }
-        
-        // 如果是房主退出，转移房主
-        if (playerId.equals(state.getHostId())) {
-            transferHost(roomId, playerId);
-        }
-        
-        // 将玩家手牌放入底盘
-        List<Card> playerCards = state.getPlayerHands().remove(playerId);
-        if (playerCards != null && !playerCards.isEmpty()) {
-            state.getCurrentPile().addAll(playerCards);
-        }
-        
-        // 从玩家列表中移除
-        state.getPlayers().remove(playerId);
-        
-        // 如果是当前玩家退出，轮到下一个玩家
-        if (playerId.equals(state.getCurrentPlayer()) && !state.getPlayers().isEmpty()) {
-            int nextIndex = (state.getPlayers().indexOf(state.getCurrentPlayer()) + 1) % state.getPlayers().size();
-            state.setCurrentPlayer(state.getPlayers().get(nextIndex));
-        }
-        
-        // 广播更新后的游戏状态
-        webSocketService.broadcastGameState(roomId);
-        
-        logger.info("玩家退出处理完成 - 房间ID: {}, 玩家ID: {}", roomId, playerId);
-    }
-
-    /**
-     * 转移房主
-     * @param roomId 房间ID
-     * @param oldHostId 原房主ID
-     */
-    private void transferHost(String roomId, String oldHostId) {
-        logger.info("转移房主 - 房间ID: {}, 原房主: {}", roomId, oldHostId);
-        
-        GameState state = roomManagementService.getGameState(roomId);
-        if (state == null || state.getPlayers().isEmpty()) {
-            logger.error("无法转移房主 - 房间ID: {}", roomId);
-            return;
-        }
-        
-        // 选择新房主（通常是玩家列表中的第一个玩家）
-        String newHostId = state.getPlayers().get(0);
-        state.setHostId(newHostId);
-        
-        // 广播房主变更通知
-        webSocketService.sendHostTransferNotification(roomId, oldHostId, newHostId);
-        
-        logger.info("房主转移完成 - 房间ID: {}, 新房主: {}", roomId, newHostId);
     }
 
     /**

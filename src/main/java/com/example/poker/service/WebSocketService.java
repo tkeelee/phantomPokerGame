@@ -1,5 +1,6 @@
 package com.example.poker.service;
 
+import com.example.poker.model.GameRoom;
 import com.example.poker.model.GameState;
 import com.example.poker.model.Card;
 import com.example.poker.model.Player;
@@ -73,7 +74,14 @@ public class WebSocketService {
     public void broadcastGameState(String roomId) {
         logger.debug("广播游戏状态 - 房间ID: {}", roomId);
         
-        GameState state = roomManagementService.getGameState(roomId);
+        GameRoom room = roomManagementService.getRoom(roomId);
+        if (room == null) {
+            logger.error("广播游戏状态失败 - 房间不存在: {}", roomId);
+            return;
+        }
+        
+        // 使用toGameState方法转换为GameState对象，保持与前端的兼容性
+        GameState state = room.toGameState();
         String destination = GameConstants.TOPIC_GAME_STATE + roomId;
         
         messagingTemplate.convertAndSend(destination, state);

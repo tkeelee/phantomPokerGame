@@ -8,14 +8,14 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 
 /**
  * 游戏服务类，负责处理游戏的主要逻辑
  */
 @Service
 public class GameService {
-    private  Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
-    private  Map<String, GameState> gameStates = new ConcurrentHashMap<>();
+    private Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
     
     @Autowired
     private DeckService deckService;
@@ -23,12 +23,28 @@ public class GameService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    @Lazy
+    private RoomManagementService roomManagementService;
+
     private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
-    public void syncRoomsAndGameStates(Map<String, GameRoom> rooms, Map<String, GameState> gameStates) {
-        this.gameStates = gameStates;
+    /**
+     * 同步房间数据
+     * @param rooms 房间映射
+     */
+    public void syncRooms(Map<String, GameRoom> rooms) {
         this.rooms = rooms;
     }
+
+    /**
+     * 保留此方法以兼容现有代码，但内部实现已更改
+     */
+    public void syncRoomsAndGameStates(Map<String, GameRoom> rooms, Map<String, GameState> gameStates) {
+        this.rooms = rooms;
+        // gameStates不再使用，忽略此参数
+    }
+
     /**
      * 玩家准备
      * @param roomId 房间ID
@@ -49,26 +65,16 @@ public class GameService {
             room.getReadyPlayers().add(playerId);
         }
 
-        GameState state1 = gameStates.get(roomId);
-        if (state1 != null) {
-            state1.getReadyPlayers().add(playerId);
-            // 发送状态更新
-            sendGameStateUpdate(roomId);
-        }
+        // 发送状态更新
+        sendGameStateUpdate(roomId);
         
         // 如果所有玩家都准备好了，房主可以开始游戏
         if (room.getReadyPlayers().size() == room.getPlayers().size() && room.getPlayers().size() >= 2) {
             room.setStatus(GameStatus.READY);
+            room.setGameStatus("READY");
             
-            // 更新游戏状态
-            GameState state = gameStates.get(roomId);
-            if (state != null) {
-                state.setStatus(GameStatus.READY);
-                state.setGameStatus("READY");
-                
-                // 发送状态更新
-                sendGameStateUpdate(roomId);
-            }
+            // 发送状态更新
+            sendGameStateUpdate(roomId);
         }
         
         return room;
@@ -105,23 +111,15 @@ public class GameService {
         
         // 更新房间状态
         room.setStatus(GameStatus.PLAYING);
+        room.setGameStatus("PLAYING");
         room.setCardDeck(new ArrayList<>());  // 牌已经分完了
         room.setPlayerHands(playerHands);
         room.setCurrentPlayerIndex(0);  // 房主先手
         room.setCurrentPile(new ArrayList<>());
+        room.setCurrentPlayer(room.getPlayers().get(0));
         
-        // 更新游戏状态
-        GameState state = gameStates.get(roomId);
-        if (state != null) {
-            state.setStatus(GameStatus.PLAYING);
-            state.setGameStatus("PLAYING");
-            state.setPlayerHands(playerHands);
-            state.setCurrentPlayer(room.getPlayers().get(0));
-            state.setCurrentPlayerIndex(0);
-            
-            // 发送状态更新
-            sendGameStateUpdate(roomId);
-        }
+        // 发送状态更新
+        sendGameStateUpdate(roomId);
         
         return room;
     }
@@ -144,18 +142,13 @@ public class GameService {
             throw new RuntimeException("玩家不在房间中");
         }
         
-        GameState state = gameStates.get(roomId);
-        if (state == null) {
-            throw new RuntimeException("游戏状态不存在");
-        }
-        
         // 检查是否是当前玩家的回合
-        if (!message.getPlayerId().equals(state.getCurrentPlayer())) {
+        if (!message.getPlayerId().equals(room.getCurrentPlayer())) {
             throw new RuntimeException("不是你的回合");
         }
         
         // 检查玩家是否有这些牌
-        List<Card> playerCards = state.getPlayerHands().get(message.getPlayerId());
+        List<Card> playerCards = room.getPlayerHands().get(message.getPlayerId());
         List<Card> selectedCards = message.getCards();
         if (!hasAllCards(playerCards, selectedCards)) {
             throw new RuntimeException("你没有这些牌");
@@ -163,9 +156,9 @@ public class GameService {
         
         // 如果已有上一玩家出牌且有声明值，则当前玩家必须遵守相同的声明值
         // 除非所有其他玩家都已过牌，此时玩家可以自由选择牌值
-        if (state.getDeclaredValue() != null && !state.haveAllPlayersPassed()) {
-            if (!message.getDeclaredValue().equals(state.getDeclaredValue())) {
-                throw new RuntimeException("必须声明与上一玩家相同的牌值: " + state.getDeclaredValue());
+        if (room.getLastClaim() != null && !room.haveAllPlayersPassed()) {
+            if (!message.getDeclaredValue().equals(room.getLastClaim())) {
+                throw new RuntimeException("必须声明与上一玩家相同的牌值: " + room.getLastClaim());
             }
         }
         
@@ -173,28 +166,24 @@ public class GameService {
         removeCards(playerCards, selectedCards);
         
         // 添加到当前牌堆
-        state.getCurrentPile().addAll(selectedCards);
+        room.getCurrentPile().addAll(selectedCards);
         
         // 记录玩家声明
-        state.setLastClaim("玩家" + message.getPlayerId() + 
+        room.setLastClaim("玩家" + message.getPlayerId() + 
                            "打出" + message.getDeclaredCount() + 
                            "张" + message.getDeclaredValue());
-        state.setDeclaredValue(message.getDeclaredValue());
-        
-        // 记录上一次出牌的玩家ID
-        state.setLastPlayerId(message.getPlayerId());
         
         // 清空过牌玩家列表，因为新的一轮出牌开始了
-        state.clearPassedPlayers();
+        room.clearPassedPlayers();
         
         // 检查是否有其他玩家已经打完手牌但仍在等待确认
         // 当其他玩家出牌后，这些玩家满足"被质疑失败或其他玩家出牌"的条件
-        List<String> pendingWinners = new ArrayList<>(state.getWinners());
+        List<String> pendingWinners = new ArrayList<>(room.getWinners());
         for (String winner : pendingWinners) {
             // 如果赢家不是当前出牌的玩家，且仍在玩家列表中
-            if (!winner.equals(message.getPlayerId()) && state.getPlayers().contains(winner)) {
+            if (!winner.equals(message.getPlayerId()) && room.getPlayers().contains(winner)) {
                 // 将该玩家从当前玩家列表中移除（确认胜利）
-                state.getPlayers().remove(winner);
+                room.getPlayers().remove(winner);
             }
         }
         
@@ -205,9 +194,9 @@ public class GameService {
         }
         
         // 切换到下一个玩家
-        int nextIndex = (state.getPlayers().indexOf(message.getPlayerId()) + 1) % state.getPlayers().size();
-        state.setCurrentPlayer(state.getPlayers().get(nextIndex));
-        state.setCurrentPlayerIndex(nextIndex);
+        int nextIndex = (room.getPlayers().indexOf(message.getPlayerId()) + 1) % room.getPlayers().size();
+        room.setCurrentPlayer(room.getPlayers().get(nextIndex));
+        room.setCurrentPlayerIndex(nextIndex);
         
         // 发送状态更新
         sendGameStateUpdate(roomId);
@@ -233,19 +222,14 @@ public class GameService {
             throw new RuntimeException("玩家不在房间中");
         }
         
-        GameState state = gameStates.get(roomId);
-        if (state == null) {
-            throw new RuntimeException("游戏状态不存在");
-        }
-        
         // 获取当前牌堆中的牌
-        List<Card> currentPile = state.getCurrentPile();
+        List<Card> currentPile = room.getCurrentPile();
         if (currentPile.isEmpty()) {
             throw new RuntimeException("当前没有可质疑的牌");
         }
         
         // 获取声明的值
-        String declaredValue = state.getDeclaredValue();
+        String declaredValue = room.getLastClaim();
         if (declaredValue == null) {
             throw new RuntimeException("当前没有声明");
         }
@@ -257,44 +241,42 @@ public class GameService {
         if (challengeSuccess) {
             // 质疑成功，出牌者收走底盘
             String targetPlayerId = message.getTargetPlayerId(); // 被质疑的玩家
-            punishPlayer(state, targetPlayerId);
+            punishPlayer(room, targetPlayerId);
             
             // 如果被质疑的玩家之前已经打完手牌（手牌为空但仍在players列表中等待确认）
             // 则需要将其从winners列表中移除，因为质疑成功意味着他需要重新开始
-            List<Card> targetPlayerHand = state.getPlayerHands().get(targetPlayerId);
-            if (targetPlayerHand.isEmpty() && state.getWinners().contains(targetPlayerId)) {
-                state.getWinners().remove(targetPlayerId);
+            List<Card> targetPlayerHand = room.getPlayerHands().get(targetPlayerId);
+            if (targetPlayerHand.isEmpty() && room.getWinners().contains(targetPlayerId)) {
+                room.getWinners().remove(targetPlayerId);
             }
             
             // 质疑玩家获得出牌权
-            state.setCurrentPlayer(message.getPlayerId());
-            state.setCurrentPlayerIndex(state.getPlayers().indexOf(message.getPlayerId()));
+            room.setCurrentPlayer(message.getPlayerId());
+            room.setCurrentPlayerIndex(room.getPlayers().indexOf(message.getPlayerId()));
         } else {
             // 质疑失败，质疑者收走底盘
-            punishPlayer(state, message.getPlayerId());
+            punishPlayer(room, message.getPlayerId());
             // 被质疑玩家ID
             String targetPlayerId = message.getTargetPlayerId();
             // 出牌者获得出牌权
-            state.setCurrentPlayer(targetPlayerId);
-            state.setCurrentPlayerIndex(state.getPlayers().indexOf(targetPlayerId));
+            room.setCurrentPlayer(targetPlayerId);
+            room.setCurrentPlayerIndex(room.getPlayers().indexOf(targetPlayerId));
             
             // 如果被质疑的玩家手牌为空，且在winners列表中，此时应确认其真正赢得比赛
             // 因为他被质疑但质疑失败，满足"出完手牌后无人质疑成功"的条件
-            List<Card> targetPlayerHand = state.getPlayerHands().get(targetPlayerId);
-            if (targetPlayerHand.isEmpty() && state.getWinners().contains(targetPlayerId)) {
+            List<Card> targetPlayerHand = room.getPlayerHands().get(targetPlayerId);
+            if (targetPlayerHand.isEmpty() && room.getWinners().contains(targetPlayerId)) {
                 // 将玩家从游戏中移除，但保留在winners列表中
-                state.getPlayers().remove(targetPlayerId);
+                room.getPlayers().remove(targetPlayerId);
             }
         }
         
         // 清空当前牌堆
-        state.getCurrentPile().clear();
-        state.setLastClaim(null);
-        state.setDeclaredValue(null);
-        state.setLastPlayerId(null);
+        room.getCurrentPile().clear();
+        room.setLastClaim(null);
         
         // 清空过牌玩家列表，因为新的一轮开始了
-        state.clearPassedPlayers();
+        room.clearPassedPlayers();
         
         // 发送状态更新
         sendGameStateUpdate(roomId);
@@ -320,28 +302,23 @@ public class GameService {
             throw new RuntimeException("玩家不在房间中");
         }
         
-        GameState state = gameStates.get(roomId);
-        if (state == null) {
-            throw new RuntimeException("游戏状态不存在");
-        }
-        
         // 检查是否是当前玩家的回合
-        if (!playerId.equals(state.getCurrentPlayer())) {
+        if (!playerId.equals(room.getCurrentPlayer())) {
             throw new RuntimeException("不是你的回合");
         }
         
         // 记录该玩家已过牌
-        state.addPassedPlayer(playerId);
+        room.addPassedPlayer(playerId);
         
         // 切换到下一个玩家
-        int nextIndex = (state.getPlayers().indexOf(playerId) + 1) % state.getPlayers().size();
-        state.setCurrentPlayer(state.getPlayers().get(nextIndex));
-        state.setCurrentPlayerIndex(nextIndex);
+        int nextIndex = (room.getPlayers().indexOf(playerId) + 1) % room.getPlayers().size();
+        room.setCurrentPlayer(room.getPlayers().get(nextIndex));
+        room.setCurrentPlayerIndex(nextIndex);
         
         // 如果下一个玩家是最初出牌的玩家，说明已经轮了一圈都过牌了
         // 此时清空过牌记录，给这个玩家重新出牌的自由度
-        if (nextIndex == state.getPlayers().indexOf(state.getLastPlayerId())) {
-            state.clearPassedPlayers();
+        if (nextIndex == room.getPlayers().indexOf(room.getLastPlayerId())) {
+            room.clearPassedPlayers();
         }
         
         // 发送状态更新
@@ -361,17 +338,16 @@ public class GameService {
             throw new RuntimeException("房间不存在");
         }
         
-        GameState state = gameStates.get(roomId);
-        if (state == null) {
-            throw new RuntimeException("游戏状态不存在");
-        }
-        
         List<PlayerState> players = new ArrayList<>();
         for (String playerId : room.getPlayers()) {
-            PlayerState playerState = new PlayerState(playerId);
-            playerState.setHand(state.getPlayerHands().getOrDefault(playerId, new ArrayList<>()));
-            playerState.setReady(room.getReadyPlayers().contains(playerId));
-            playerState.setHost(playerId.equals(room.getHostId()));
+            // 创建一个临时的Player对象
+            Player player = new Player(playerId, playerId);
+            player.setHand(room.getPlayerHands().getOrDefault(playerId, new ArrayList<>()));
+            player.setReady(room.getReadyPlayers().contains(playerId));
+            player.setHost(playerId.equals(room.getHostId()));
+            
+            // 转换为PlayerState
+            PlayerState playerState = PlayerState.fromPlayer(player);
             players.add(playerState);
         }
         
@@ -436,31 +412,29 @@ public class GameService {
      */
     private void handlePlayerWin(String roomId, String playerId) {
         GameRoom room = rooms.get(roomId);
-        GameState state = gameStates.get(roomId);
         
-        if (room != null && state != null) {
+        if (room != null) {
             // 检查是否有人质疑当前出牌
-            if (state.getLastClaim() != null && state.getLastPlayerId() != null 
-                && state.getLastPlayerId().equals(playerId)) {
+            if (room.getLastClaim() != null && room.getLastPlayerId() != null 
+                && room.getLastPlayerId().equals(playerId)) {
                 // 添加玩家到胜利列表，但不从游戏中移除
                 // 只有当被质疑失败或其他玩家出牌后，才算真正胜利
-                if (!state.getWinners().contains(playerId)) {
-                    state.getWinners().add(playerId);
+                if (!room.getWinners().contains(playerId)) {
+                    room.getWinners().add(playerId);
                 }
             } else {
                 // 如果是被质疑失败或其他玩家已出牌，则算真正胜利
                 // 将玩家从当前玩家列表中移除，但保留在胜利列表中
-                if (!state.getWinners().contains(playerId)) {
-                    state.getWinners().add(playerId);
+                if (!room.getWinners().contains(playerId)) {
+                    room.getWinners().add(playerId);
                 }
-                state.getPlayers().remove(playerId);
+                room.getPlayers().remove(playerId);
             }
             
             // 如果只剩最后一个玩家有手牌，游戏结束
             if (room.checkGameEnd()) {
                 room.setStatus(GameStatus.FINISHED);
-                state.setStatus(GameStatus.FINISHED);
-                state.setGameStatus("FINISHED");
+                room.setGameStatus("FINISHED");
             }
             
             // 发送状态更新
@@ -470,13 +444,13 @@ public class GameService {
     
     /**
      * 惩罚玩家（将底盘牌加入其手牌）
-     * @param state 游戏状态
+     * @param room 游戏房间
      * @param playerId 被惩罚的玩家ID
      */
-    private void punishPlayer(GameState state, String playerId) {
-        List<Card> playerHand = state.getPlayerHands().get(playerId);
-        if (playerHand != null && state.getCurrentPile() != null) {
-            playerHand.addAll(state.getCurrentPile());
+    private void punishPlayer(GameRoom room, String playerId) {
+        List<Card> playerHand = room.getPlayerHands().get(playerId);
+        if (playerHand != null && room.getCurrentPile() != null) {
+            playerHand.addAll(room.getCurrentPile());
         }
     }
     
@@ -485,8 +459,10 @@ public class GameService {
      * @param roomId 房间ID
      */
     public void sendGameStateUpdate(String roomId) {
-        GameState state = gameStates.get(roomId);
-        if (state != null && messagingTemplate != null) {
+        GameRoom room = rooms.get(roomId);
+        if (room != null && messagingTemplate != null) {
+            // 使用toGameState方法转换为GameState对象，保持与前端的兼容性
+            GameState state = room.toGameState();
             messagingTemplate.convertAndSend("/topic/game/state/" + roomId, state);
         }
     }
@@ -569,7 +545,6 @@ public class GameService {
         if (room.getPlayers().isEmpty() || room.getPlayers().stream().allMatch(room::isRobot)) {
             // 如果房间内只剩下机器人或没有玩家，解散房间
             rooms.remove(roomId);
-            gameStates.remove(roomId);
             
             // 广播房间解散消息
             if (messagingTemplate != null) {
@@ -588,9 +563,8 @@ public class GameService {
     /**
      * 处理机器人的回合
      * @param room 游戏房间
-     * @param gameState 游戏状态
      */
-    private void handleRobotTurn(GameRoom room, GameState gameState) {
+    private void handleRobotTurn(GameRoom room) {
         String currentPlayerId = room.getCurrentPlayerId();
         if (!room.isRobot(currentPlayerId)) {
             return;
@@ -603,11 +577,11 @@ public class GameService {
                 "机器人" + currentPlayerId.substring(6), // 从"robot_X"中提取数字
                 room.getRobotDifficulty()
             );
-            robot.setHand(gameState.getPlayerHands().get(currentPlayerId));
+            robot.setHand(room.getPlayerHands().get(currentPlayerId));
 
             // 获取上一个声明
             String lastClaim = room.getLastClaim();
-            List<Card> currentPile = gameState.getCurrentPile();
+            List<Card> currentPile = room.getCurrentPile();
 
             // 根据难度设置延迟时间
             int delay = switch (room.getRobotDifficulty()) {
@@ -645,8 +619,8 @@ public class GameService {
             // 如果被中断，让下一个玩家继续
             String nextPlayerId = room.getNextPlayerId();
             if (nextPlayerId != null) {
-                gameState.setCurrentPlayer(nextPlayerId);
-                gameState.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
+                room.setCurrentPlayer(nextPlayerId);
+                room.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
                 sendGameStateUpdate(room.getId());
             }
         } catch (Exception e) {
@@ -655,8 +629,8 @@ public class GameService {
             e.printStackTrace();
             String nextPlayerId = room.getNextPlayerId();
             if (nextPlayerId != null) {
-                gameState.setCurrentPlayer(nextPlayerId);
-                gameState.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
+                room.setCurrentPlayer(nextPlayerId);
+                room.setCurrentPlayerIndex(room.getPlayers().indexOf(nextPlayerId));
                 sendGameStateUpdate(room.getId());
             }
         }
@@ -670,12 +644,11 @@ public class GameService {
 
         // 在处理完出牌后，检查下一个玩家是否是机器人
         GameRoom room = rooms.get(roomId);
-        GameState gameState = gameStates.get(roomId);
         
         String nextPlayerId = room.getNextPlayerId();
         if (room.isRobot(nextPlayerId)) {
             // 如果下一个玩家是机器人，执行机器人的回合
-            handleRobotTurn(room, gameState);
+            handleRobotTurn(room);
         }
     }
 
@@ -687,12 +660,11 @@ public class GameService {
 
         // 在处理完质疑后，检查下一个玩家是否是机器人
         GameRoom room = rooms.get(roomId);
-        GameState gameState = gameStates.get(roomId);
         
         String nextPlayerId = room.getNextPlayerId();
         if (room.isRobot(nextPlayerId)) {
             // 如果下一个玩家是机器人，执行机器人的回合
-            handleRobotTurn(room, gameState);
+            handleRobotTurn(room);
         }
     }
 
@@ -704,41 +676,37 @@ public class GameService {
 
         // 在处理完过牌后，检查下一个玩家是否是机器人
         GameRoom room = rooms.get(roomId);
-        GameState gameState = gameStates.get(roomId);
         
         String nextPlayerId = room.getNextPlayerId();
         if (room.isRobot(nextPlayerId)) {
             // 如果下一个玩家是机器人，执行机器人的回合
-            handleRobotTurn(room, gameState);
+            handleRobotTurn(room);
         }
     }
 
     /**
-     * 广播房间状态更新
-     * @param room 游戏房间
+     * 广播房间状态
+     * @param room 房间
      */
     public void broadcastRoomState(GameRoom room) {
-        if (messagingTemplate == null) return;
+        if (room == null) {
+            return;
+        }
         
-        // 获取游戏状态
-        GameState state = gameStates.get(room.getId());
-        if (state == null) return;
+        // 获取公共视图的房间数据
+        GameRoom publicRoom = createPublicRoomView(room);
         
-        // 更新状态中的机器人信息--如果不更新，房间里也看不到
-        state.setPlayers(room.getPlayers());
-        state.setReadyPlayers(room.getReadyPlayers());
-        state.setRobotCount(room.getRobotCount());
-
-        //TODO 状态没有同步回roommanagement
+        // 向房间内的每个玩家发送他们的私有视图
+        for (String playerId : room.getPlayers()) {
+            GameRoom playerView = createPlayerView(room, playerId);
+            messagingTemplate.convertAndSendToUser(playerId, "/queue/game", playerView);
+        }
         
-        // 广播更新
-        messagingTemplate.convertAndSend("/topic/game/state/" + room.getId(), state);
+        // 向房间主题广播公共视图
+        messagingTemplate.convertAndSend("/topic/game/" + room.getId(), publicRoom);
         
-        // 广播房间列表更新（不包含机器人信息）
-        List<GameRoom> publicRooms = rooms.values().stream()
-                .map(this::createPublicRoomView)
-                .toList();
-        messagingTemplate.convertAndSend("/topic/rooms", publicRooms);
+        // 使用RoomManagementService广播房间列表更新，确保数据一致性
+        roomManagementService.syncRoomData();
     }
 
     /**
@@ -769,6 +737,37 @@ public class GameService {
     }
 
     /**
+     * 创建房间的玩家私有视图
+     * @param room 原始房间
+     * @param playerId 玩家ID
+     * @return 玩家私有视图
+     */
+    private GameRoom createPlayerView(GameRoom room, String playerId) {
+        GameRoom playerView = new GameRoom();
+        playerView.setId(room.getId());
+        playerView.setHostId(room.getHostId());
+        playerView.setMaxPlayers(room.getMaxPlayers());
+        playerView.setStatus(room.getStatus());
+        
+        // 只包含玩家自己的手牌
+        List<Card> playerCards = room.getPlayerHands().get(playerId);
+        Map<String, List<Card>> playerHandMap = new HashMap<>();
+        if (playerCards != null) {
+            playerHandMap.put(playerId, playerCards);
+        }
+        playerView.setPlayerHands(playerHandMap);
+        
+        // 设置准备状态
+        List<String> readyPlayers = new ArrayList<>();
+        if (room.getReadyPlayers().contains(playerId)) {
+            readyPlayers.add(playerId);
+        }
+        playerView.setReadyPlayers(readyPlayers);
+        
+        return playerView;
+    }
+
+    /**
      * 更新游戏状态中的机器人信息
      * @param roomId 房间ID
      */
@@ -778,69 +777,8 @@ public class GameService {
             throw new RuntimeException("房间不存在");
         }
         
-        GameState state = gameStates.get(roomId);
-        if (state == null) {
-            throw new RuntimeException("游戏状态不存在");
-        }
-        
         // 更新机器人计数
-        state.setRobotCount(room.getRobotCount());
+        room.setRobotCount(room.getRobotCount());
     }
 
-    /**
-     * 处理玩家退出房间
-     * @param roomId 房间ID
-     * @param playerId 玩家ID
-     */
-    public void handlePlayerExit(String roomId, String playerId) {
-        GameRoom room = rooms.get(roomId);
-        if (room == null) return;
-
-        room.handlePlayerExit(playerId);
-        
-        // 如果是房主退出，且房间还有其他玩家，转移房主权限
-        if (playerId.equals(room.getHostId()) && !room.getPlayers().isEmpty()) {
-            // 找到第一个非机器人玩家作为新房主
-            String newHost = room.getPlayers().stream()
-                    .filter(p -> !room.isRobot(p))
-                    .findFirst()
-                    .orElse(null);
-            
-            if (newHost != null) {
-                room.setHostId(newHost);
-            } else {
-                // 如果没有非机器人玩家，解散房间
-                rooms.remove(roomId);
-                gameStates.remove(roomId);
-                
-                // 广播房间解散消息
-                if (messagingTemplate != null) {
-                    GameNotification notification = new GameNotification();
-                    notification.setType("ROOM_DISSOLVED");
-                    notification.setContent("房间已解散");
-                    notification.setRoomId(roomId);
-                    messagingTemplate.convertAndSend("/topic/game/notification/" + roomId, notification);
-                }
-                return;
-            }
-        }
-        
-        // 检查房间是否需要解散
-        if (room.getPlayers().isEmpty() || room.getPlayers().stream().allMatch(room::isRobot)) {
-            rooms.remove(roomId);
-            gameStates.remove(roomId);
-            
-            // 广播房间解散消息
-            if (messagingTemplate != null) {
-                GameNotification notification = new GameNotification();
-                notification.setType("ROOM_DISSOLVED");
-                notification.setContent("房间已解散");
-                notification.setRoomId(roomId);
-                messagingTemplate.convertAndSend("/topic/game/notification/" + roomId, notification);
-            }
-        } else {
-            // 广播房间状态更新
-            broadcastRoomState(room);
-        }
-    }
 }
